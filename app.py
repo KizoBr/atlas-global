@@ -6,19 +6,14 @@ import requests
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-
 st.set_page_config(page_title="Atlas Global", page_icon="🌎", layout="wide")
-
 # Cache mensal: 30 dias contados a partir da primeira consulta armazenada.
 # Quando expira, a próxima visita faz uma nova consulta à fonte; não há
 # execução em segundo plano nem garantia de atualização das bases de origem.
 CACHE_MENSAL_SEGUNDOS = 30 * 24 * 60 * 60
-
-
 LATAM = {'ARG':'Argentina','BOL':'Bolívia','BRA':'Brasil','CHL':'Chile','COL':'Colômbia','CRI':'Costa Rica','CUB':'Cuba','DOM':'República Dominicana','ECU':'Equador','SLV':'El Salvador','GTM':'Guatemala','HTI':'Haiti','HND':'Honduras','MEX':'México','NIC':'Nicarágua','PAN':'Panamá','PRY':'Paraguai','PER':'Peru','URY':'Uruguai','VEN':'Venezuela'}
 BRICS = {'BRA':'Brasil','RUS':'Rússia','IND':'Índia','CHN':'China','ZAF':'África do Sul','EGY':'Egito','ETH':'Etiópia','IRN':'Irã','ARE':'Emirados Árabes Unidos','IDN':'Indonésia','SAU':'Arábia Saudita'}
 COUNTRIES = dict(sorted((LATAM | BRICS).items(), key=lambda item: item[1]))
-
 # Catálogo com 28 indicadores; 28 possuem integração programada (algumas fontes podem falhar).
 INDICATORS = {
     'PIB total': dict(code='NY.GDP.MKTP.CD', unit='US$ correntes', category='Economia e finanças públicas', description='Valor monetário dos bens e serviços finais produzidos dentro do país em um ano, a preços correntes.', formula='PIB = consumo + investimento + gasto do governo + exportações − importações.'),
@@ -50,10 +45,8 @@ INDICATORS = {
     'Índice Global de Crime Organizado': dict(code='ocindex_criminality', provider='GI-TOC', unit='índice de 1 a 10', category='Segurança', description='Mede a presença e extensão de mercados e atores criminosos, conforme o Índice Global de Crime Organizado.', formula='Agregação de dimensões de criminalidade segundo a metodologia e ponderações da edição oficial.'),
     'Homicídios intencionais (violência letal)': dict(code='VC.IHR.PSRC.P5', unit='por 100 mil habitantes', category='Segurança', description='Homicídios intencionais por 100 mil habitantes; indicador nacional de violência letal, não exclusivamente urbana.', formula='Número de homicídios intencionais ÷ população × 100.000.'),
 }
-
 # Detalhes adicionais sobre interpretação e limitações metodológicas.
 DETAILS = {'PIB total': 'É registrado pelo critério territorial: conta a produção realizada no país, independentemente da nacionalidade das empresas. A ótica da despesa soma consumo das famílias, investimento, consumo do governo e exportações líquidas. Para avaliar bem-estar médio ou evolução real, complemente com PIB por habitante e séries a preços constantes.', 'PIB per capita (PPC)': 'A paridade de poder de compra ajusta diferenças de níveis de preços, permitindo comparar o volume real de bens e serviços entre economias. A série escolhida é expressa em dólares internacionais constantes; o ano-base depende da publicação da fonte. Como é uma média, não informa desigualdade, qualidade dos serviços públicos ou renda disponível das famílias.', 'Crescimento real do PIB': 'Compara o volume de produção em anos consecutivos, removendo a variação de preços por meio de deflatores. Taxas positivas indicam expansão e taxas negativas indicam contração. Um crescimento expressivo após uma recessão pode refletir recuperação de uma base baixa, e não necessariamente aceleração sustentada.', 'Inflação anual': 'O índice de preços ao consumidor acompanha a variação do custo de uma cesta representativa de bens e serviços. A série anual mede a variação média do índice ao longo do ano, que pode diferir da inflação acumulada em doze meses até dezembro. A cesta e os pesos variam entre países.', 'Taxa de desemprego': 'A força de trabalho reúne pessoas ocupadas e desempregadas; quem está fora dela não entra no denominador. Os dados internacionais harmonizados podem incluir estimativas modeladas pela OIT. Por isso, compare junto com participação no mercado de trabalho, informalidade e horas trabalhadas.', 'Produtividade do trabalho': 'O numerador usa valor adicionado ou PIB em termos reais, ajustado por paridade de poder de compra; o denominador é o total de horas efetivamente trabalhadas. Ganhos de produtividade podem decorrer de capital, tecnologia, organização ou composição setorial, não apenas do esforço individual. A cobertura e o método de harmonização ainda serão definidos na integração da fonte.', 'Dívida pública (% do PIB)': 'O governo geral abrange os níveis de governo e suas entidades cobertas pela metodologia fiscal. A dívida bruta contabiliza obrigações sem descontar integralmente ativos financeiros. O indicador é um estoque relativo ao PIB anual; juros, moeda, vencimentos e capacidade de arrecadação são fundamentais para avaliar risco fiscal.', 'Receita tributária (% do PIB, sem contribuições)': 'Série do Banco Mundial baseada em estatísticas fiscais, excluindo contribuições sociais; portanto não substitui a carga tributária total. Verifique a cobertura de administração central ou governo geral informada pela fonte e eventuais lacunas.', 'Carga tributária (% do PIB)': 'A abrangência precisa incluir regras consistentes para impostos, taxas e contribuições sociais obrigatórias, pois diferentes fontes usam conceitos distintos. O indicador aproxima o peso da tributação na economia, mas não mostra quem paga, a progressividade nem a qualidade dos serviços financiados. A fonte harmonizada será definida antes da comparação.', 'Gasto total do governo (% do PIB)': 'O governo geral inclui despesas de diferentes esferas administrativas conforme as contas públicas da fonte. A medida incorpora remuneração, benefícios sociais, juros e investimentos, conforme o padrão estatístico adotado. Não é uma medida isolada do tamanho da burocracia, da eficiência ou da qualidade dos serviços públicos.', 'Expectativa de vida': 'É um indicador de período obtido pela aplicação das taxas correntes de mortalidade por idade a uma população hipotética. Não é uma previsão exata da duração de vida de quem nasceu naquele ano. Pode variar por crises sanitárias e mudanças de mortalidade, mesmo sem alterações imediatas na estrutura etária.', 'Mortalidade infantil': 'Apresenta a probabilidade estimada de morte antes do primeiro aniversário para cada mil nascimentos vivos. É sensível a condições materno-infantis, saneamento, atenção pré-natal e acesso ao sistema de saúde. As estimativas internacionais também buscam corrigir sub-registro e diferenças na qualidade dos registros vitais.', 'Gastos com saúde (% do PIB)': 'Abrange gastos correntes de governos, seguros, empresas e famílias com serviços e bens de saúde. Não equivale à despesa exclusivamente pública, nem incorpora necessariamente a formação de capital. Uma participação maior pode refletir prioridade de gasto, preços elevados, envelhecimento ou ineficiência, exigindo análise contextual.', 'Gastos com saúde por habitante': 'Divide o gasto corrente total em saúde pelo número de residentes e converte o resultado para dólares correntes. Facilita a comparação de escala financeira, mas taxas de câmbio e diferenças de preços afetam o resultado. Uma série PPC pode ser mais adequada para comparação do volume de serviços comprados.', 'Taxa de alfabetização de adultos': 'Considera pessoas de 15 anos ou mais e a capacidade de ler e escrever uma frase simples com compreensão, segundo a definição operacional da fonte. Pesquisas e censos podem utilizar perguntas e periodicidades diferentes. A medida não captura integralmente proficiência leitora, escolaridade ou alfabetização funcional.', 'Gastos públicos com educação (% do PIB)': 'Compara despesas governamentais em educação, de acordo com o escopo da fonte, com o valor total da produção econômica. Pode incluir diferentes níveis de ensino e despesas correntes e de capital. Não indica automaticamente qualidade, eficiência ou equidade do sistema educacional.', 'Anos médios de escolaridade': 'O indicador do PNUD considera adultos de 25 anos ou mais e estima o número médio de anos concluídos na educação formal. Séries históricas podem conter imputações e revisões, sobretudo onde censos e pesquisas não são anuais.', 'Expectativa de anos de escolaridade': 'É uma medida sintética construída com taxas de matrícula por idade, não uma previsão individual ou medida de aprendizagem. Mudanças de acesso à escola ou de organização do sistema podem alterar os resultados ao longo do tempo.', 'PISA — Matemática': 'As pontuações são estimativas obtidas por amostragem de estudantes de aproximadamente 15 anos. Nem todos os países participam; diferenças pequenas podem não ser estatisticamente significativas. Esta integração possui apenas resultados de 2022 e necessita validação contra a tabela oficial da OCDE. O gráfico mostra apenas os anos avaliados, sem interpolação.', 'PISA — Leitura': 'A média é estimada pela OCDE a partir de valores plausíveis e pesos amostrais. Mudanças de participação, cobertura e padrões de resposta exigem cautela na comparação. Esta integração possui apenas resultados de 2022; outros ciclos ainda não foram incorporados.', 'PISA — Ciências': 'A avaliação de Ciências mede capacidade de explicar fenômenos, interpretar dados e avaliar evidências, não apenas memorização. A pontuação depende de amostras e ajustes estatísticos e não deve ser interpretada como medida isolada de eficiência do gasto. A série integrada nesta etapa termina em 2022.', 'Matrícula no ensino superior (% bruta)': 'A taxa bruta de matrícula é o total de estudantes do ensino superior, sem limite de idade, dividido pela população do grupo etário de referência. Não informa quantos alunos concluem o curso, sua aprendizagem ou a qualidade da formação.', 'Índice de Desenvolvimento Humano (IDH)': 'A saúde é representada pela expectativa de vida ao nascer; a educação combina anos médios e esperados de escolaridade; e a dimensão econômica usa a renda nacional bruta per capita em PPC. Os componentes passam por normalização e são agregados por média geométrica. O IDH não capta diretamente desigualdades internas, liberdade, violência ou sustentabilidade ambiental.', 'Taxa de pobreza': 'A linha de US$ 8,30 por pessoa ao dia (PPC de 2021) representa um padrão internacional de referência para economias de renda média-alta. Os dados usam renda ou consumo observados em pesquisas domiciliares. Diferem das linhas nacionais de pobreza e podem apresentar intervalos sem dados; revisões do Banco Mundial podem alterar séries históricas.', 'Pessoas em situação de fome (subalimentação)': 'O indicador da FAO, conhecido como prevalência de subalimentação, é uma estimativa baseada na disponibilidade ou consumo de calorias, na desigualdade de acesso alimentar e nas necessidades energéticas da população. Não equivale à insegurança alimentar moderada ou grave. Valores próximos ao limite inferior podem ser apresentados pela fonte como inferiores a 2,5%, exigindo cautela na comparação.', 'Índice de Gini': 'É derivado da curva de Lorenz, que ordena a população do menor para o maior valor de renda ou consumo e calcula sua parcela acumulada. Zero significa igualdade perfeita e cem representa desigualdade máxima teórica. A interpretação entre países exige verificar renda versus consumo, rendimentos brutos versus líquidos e qualidade das pesquisas domiciliares.', 'Índice Global de Crime Organizado': 'O índice publicado pela Global Initiative Against Transnational Organized Crime combina dimensões de mercados ilícitos e atores criminosos, a partir de critérios e avaliação estruturada. As pontuações não equivalem a quantidade de crimes registrados. O projeto mostrará apenas edições oficiais disponíveis, sem preencher anos intermediários.', 'Homicídios intencionais (violência letal)': 'O numerador considera mortes decorrentes de homicídio intencional segundo definições internacionais; o denominador é a população do período. É uma medida de violência letal comparável por tamanho populacional, mas não cobre integralmente roubos, agressões ou violência não letal. Além disso, é uma taxa nacional: não separa áreas urbanas e rurais.'}
-
 # Explicações editoriais: significado, utilidade e método de cálculo.
 UTILITY = {
     'PIB total': 'Dimensiona o tamanho da economia e permite comparações de escala produtiva. Por usar dólares correntes, a série também responde a mudanças cambiais e à inflação.',
@@ -82,12 +75,8 @@ UTILITY = {
     'Homicídios intencionais (violência letal)': 'Compara a intensidade da violência letal entre países considerando o tamanho populacional. A medida é nacional e não representa apenas a violência urbana.',    'PISA — Matemática': 'Permite comparar competências matemáticas desenvolvidas por estudantes de 15 anos entre sistemas educacionais participantes, sem confundir pontuação com gasto público ou anos de escolaridade.',
     'PISA — Leitura': 'Compara a proficiência em leitura aos 15 anos e sua evolução entre edições. Serve para investigar resultados de aprendizagem, não a alfabetização de toda a população.',
     'PISA — Ciências': 'Compara o desempenho em raciocínio científico aos 15 anos e ajuda a acompanhar tendências de aprendizagem entre ciclos do PISA.',
-
 }
-
-
 # Contexto metodológico adicional, exibido de forma compacta.
-
 st.markdown('''<style>
 .stApp {background: #f5f7fb; color: #17233b;}
 .block-container {max-width: 1260px; padding-top: 1.5rem;}
@@ -140,23 +129,18 @@ section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked
 section[data-testid="stSidebar"] [data-testid="stRadio"] label:has([aria-checked="true"]) {color:#173d72!important;font-weight:700;}
 section[data-testid="stSidebar"] [data-baseweb="radio"] [aria-checked="true"] {border-color:#173d72!important;background-color:#173d72!important;}
 section[data-testid="stSidebar"] [data-baseweb="radio"] [aria-checked="true"]::after {background:#fff!important;}
-
-
 </style>''',unsafe_allow_html=True)
-
 ISO2 = {'ARG':'ar','BOL':'bo','BRA':'br','CHL':'cl','COL':'co','CRI':'cr','CUB':'cu','DOM':'do','ECU':'ec','SLV':'sv','GTM':'gt','HTI':'ht','HND':'hn','MEX':'mx','NIC':'ni','PAN':'pa','PRY':'py','PER':'pe','URY':'uy','VEN':'ve','RUS':'ru','IND':'in','CHN':'cn','ZAF':'za','EGY':'eg','ETH':'et','IRN':'ir','ARE':'ae','IDN':'id','SAU':'sa'}
 def flag_image(iso3, name):
     iso2 = ISO2.get(iso3)
     if not iso2:
         return ''
     return f'<img class="flag-img" src="https://flagcdn.com/w40/{iso2}.png" alt="Bandeira de {html.escape(name, quote=True)}" loading="lazy">'
-
 def nice_number(x, code):
     # Conservar casas decimais úteis e a unidade no cabeçalho da tabela.
     if code == 'NY.GDP.MKTP.CD':
         return f'{x / 1e9:,.1f}'.replace(',','X').replace('.',',').replace('X','.')
     return f'{x:,.2f}'.replace(',','X').replace('.',',').replace('X','.')
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_indicator(code):
     url=f'https://api.worldbank.org/v2/country/{";".join(COUNTRIES)}/indicator/{code}'
@@ -171,13 +155,11 @@ def load_indicator(code):
         if iso in COUNTRIES and entry.get('value') is not None:
             rows.append({'ISO3':iso,'País':COUNTRIES[iso],'Ano':int(entry['date']),'Valor':float(entry['value'])})
     return pd.DataFrame(rows,columns=['ISO3','País','Ano','Valor'])
-
 # Fontes adicionais: IMF DataMapper e PNUD (HDR 2025, série 1990–2023).
 # Cada integração devolve exatamente as mesmas colunas do Banco Mundial.
 DATA_COLUMNS = ['ISO3', 'País', 'Ano', 'Valor']
 IMF_ENDPOINTS = ['https://www.imf.org/external/datamapper/api/v2', 'https://www.imf.org/external/datamapper/api/v1']
 UNDP_HDI_CSV = 'https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Composite_indices_complete_time_series.csv'
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_imf(code):
     if code not in ('GGXWDG_NGDP', 'GGX_NGDP'):
@@ -225,7 +207,6 @@ def load_imf(code):
             'Consulte: https://data.imf.org/datasets/WEO'
         )
     raise ValueError('O FMI não retornou dados válidos. ' + ' | '.join(failures))
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_undp_series(code):
     response = requests.get(UNDP_HDI_CSV, timeout=50)
@@ -253,7 +234,6 @@ def load_undp_series(code):
     if long.empty:
         raise ValueError(f'Nenhum valor válido encontrado no PNUD para {code}.')
     return long[DATA_COLUMNS].reset_index(drop=True)
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_productivity():
     """Série de produtividade real/hora da Penn World Table via OWID Grapher."""
@@ -279,7 +259,6 @@ def load_productivity():
     if result.empty:
         raise ValueError('Nenhuma observação de produtividade disponível para os países selecionados.')
     return result.reset_index(drop=True)
-
 # PISA 2022: resultados agregados a partir do PISA da OCDE.
 # O antigo endpoint OWID retorna HTTP 403 (possíveis restrições de redistribuição).
 # Esta tabela está publicada por terceiros no GitHub; confrontar com as tabelas
@@ -298,11 +277,9 @@ PISA_ISO_ALIASES = {
     'cuba':'CUB','venezuela':'VEN','bolivia':'BOL','ecuador':'ECU',
     'honduras':'HND','haiti':'HTI','nicaragua':'NIC',
 }
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_pisa_series(code):
     """PISA 2022, três áreas distintas. Não interpolar ciclos faltantes.
-
     A fonte espelhada é usada por estabilidade técnica, não constitui
     validação independente das cifras oficiais da OCDE.
     """
@@ -336,12 +313,9 @@ def load_pisa_series(code):
     if result.empty:
         raise ValueError('Nenhuma pontuação PISA 2022 válida nos países cadastrados.')
     return result.reset_index(drop=True)
-
-
 # GI-TOC: edição 2025 em planilha Excel oficial. Leitura com biblioteca-padrão,
 # dispensando instalação adicional de openpyxl no Streamlit Community Cloud.
 OCINDEX_2025_URL = 'https://ocindex.net/assets/downloads/global_oc_index.xlsx'
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_ocindex_2025():
     import zipfile
@@ -419,8 +393,6 @@ def load_ocindex_2025():
                 if result:
                     return pd.DataFrame(result, columns=DATA_COLUMNS).drop_duplicates(['ISO3','Ano'])
     raise ValueError('A planilha oficial foi obtida, mas sua estrutura não corresponde ao formato esperado. Não foram inferidas pontuações; é necessário ajustar o leitor à edição atual.')
-
-
 # Receita tributária harmonizada da OCDE, com contribuições sociais obrigatórias.
 # Conjunto Global Revenue Statistics, séries do governo geral como % do PIB.
 OECD_TAX_URL = (
@@ -428,7 +400,6 @@ OECD_TAX_URL = (
     'OECD.CTP.TPS,DSD_REV_COMP_GLOBAL@DF_RSGLOBAL,2.1/'
     '..S13._T..PT_B1GQ.A'
 )
-
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_oecd_tax():
     try:
@@ -469,7 +440,6 @@ def load_oecd_tax():
     df['País'] = df['ISO3'].map(COUNTRIES)
     df = df.sort_values(['ISO3','Ano']).drop_duplicates(['ISO3','Ano'], keep='last')
     return df[DATA_COLUMNS].reset_index(drop=True)
-
 def load_data(meta):
     provider = meta.get('provider', 'Banco Mundial')
     if provider == 'OCDE':
@@ -485,10 +455,8 @@ def load_data(meta):
     if provider == 'OCDE / compilação PISA 2022':
         return load_pisa_series(meta['code'])
     return load_indicator(meta['code'])
-
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p class="byline">Criado por Rafael Pires Marciano</p><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
 st.caption('Catálogo: 28 indicadores · 28 com integração programada · integrações externas sujeitas a validação. Consultas em cache por até 30 dias; cobertura conforme a fonte.')
-
 # Escolha a categoria e depois apenas um indicador dentro dela.
 # A categoria aparece na área principal, preservando espaço para o ranking.
 CATEGORIES = list(dict.fromkeys(m['category'] for m in INDICATORS.values()))
@@ -496,17 +464,14 @@ if st.session_state.get('selected_indicator') not in INDICATORS:
     st.session_state['selected_indicator'] = next(iter(INDICATORS))
 if st.session_state.get('selected_category') not in CATEGORIES:
     st.session_state['selected_category'] = INDICATORS[st.session_state['selected_indicator']]['category']
-
 def change_category():
     category = st.session_state['selected_category']
     if INDICATORS[st.session_state['selected_indicator']]['category'] != category:
         st.session_state['selected_indicator'] = next(
             name for name, item in INDICATORS.items() if item['category'] == category
         )
-
 def choose_indicator(name):
     st.session_state['selected_indicator'] = name
-
 with st.sidebar:
     st.header('Configurações')
     group=st.radio('Grupo de países', ['Todos', 'América Latina', 'BRICS', 'Personalizado'])
@@ -531,33 +496,65 @@ with st.sidebar:
     chosen=(chosen_custom if group=='Personalizado' else list(universe)) if mode=='Ranking' else []
     if mode=='Evolução histórica':
         st.caption('Escolha até cinco países acima do gráfico.')
-
-# Seleção compacta por categoria na área principal (nenhuma cor temática).
-st.markdown('#### Escolha o indicador')
-st.selectbox('Categoria', CATEGORIES, key='selected_category', on_change=change_category)
+# Seleção de categoria e do indicador na área principal.
+st.markdown('#### Escolha a categoria')
+def set_category(category):
+    st.session_state['selected_category'] = category
+    if INDICATORS[st.session_state['selected_indicator']]['category'] != category:
+        st.session_state['selected_indicator'] = next(
+            name for name, item in INDICATORS.items() if item['category'] == category
+        )
+category_style_rules = []
+for idx, category_name in enumerate(CATEGORIES):
+    selected = (st.session_state['selected_category'] == category_name)
+    key = f'category_{idx:02d}'
+    bg = '#173d72' if selected else '#d9e8fb'
+    border = '2px solid #173d72' if selected else '1px solid #9db9de'
+    text_color = '#ffffff' if selected else '#173d72'
+    shadow = '0 8px 18px rgba(23,61,114,.18)' if selected else '0 3px 10px rgba(23,61,114,.08)'
+    category_style_rules.append(
+        f'.st-key-{key} button {{background:{bg}!important;color:{text_color}!important;'
+        f'border:{border}!important;border-radius:12px!important;min-height:44px!important;'
+        'height:auto!important;padding:8px 10px!important;width:100%!important;'
+        f'box-shadow:{shadow}!important;transition:all .18s ease!important;}}'
+    )
+    category_style_rules.append(
+        f'.st-key-{key} button:hover {{transform:translateY(-1px)!important;filter:brightness(1.02)!important;}}'
+    )
+    category_style_rules.append(
+        f'.st-key-{key} button p {{font-size:.82rem!important;font-weight:700!important;'
+        f'color:{text_color}!important;line-height:1.15!important;text-align:center!important;white-space:normal!important;}}'
+    )
 indicator_names = [name for name, info in INDICATORS.items()
                    if info['category'] == st.session_state['selected_category']]
 style_rules = []
 for pos, name in enumerate(indicator_names):
     selected = (st.session_state['selected_indicator'] == name)
     key = f'indicator_{list(INDICATORS).index(name):02d}'
+    border = '2px solid #173d72' if selected else '1px solid #d4dfed'
+    weight = '750' if selected else '500'
+    shadow = '0 5px 14px rgba(23,61,114,.10)' if selected else 'none'
     style_rules.append(
-        f'.st-key-{key} button {{'
-        'background:#fff!important;color:#18304c!important;'
-        f'border:{"2px solid #173d72" if selected else "1px solid #d4dfed"}!important;'
-        'border-radius:8px!important;min-height:32px!important;height:auto!important;'
-        'padding:5px 8px!important;width:100%!important;box-shadow:none!important;'
-        'line-height:1.18!important;}'
+        f'.st-key-{key} button {{background:#fff!important;color:#18304c!important;'
+        f'border:{border}!important;border-radius:8px!important;min-height:32px!important;height:auto!important;'
+        f'padding:5px 8px!important;width:100%!important;box-shadow:{shadow}!important;line-height:1.18!important;}}'
     )
     style_rules.append(
-        f'.st-key-{key} button p {{font-size:.76rem!important;'
-        f'font-weight:{"750" if selected else "500"}!important;'
-        'color:#18304c!important;line-height:1.18!important;'
-        'text-align:center!important;white-space:normal!important;}'
+        f'.st-key-{key} button p {{font-size:.76rem!important;font-weight:{weight}!important;'
+        'color:#18304c!important;line-height:1.18!important;text-align:center!important;white-space:normal!important;}}'
     )
     if selected:
         style_rules.append(f'.st-key-{key} button {{background:#eaf2ff!important;}}')
-st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
+st.markdown('<style>' + '\n'.join(category_style_rules + style_rules) + '</style>', unsafe_allow_html=True)
+category_cols = st.columns(len(CATEGORIES), gap='small')
+for idx, (col, category_name) in enumerate(zip(category_cols, CATEGORIES)):
+    with col:
+        is_category_active = st.session_state['selected_category'] == category_name
+        st.button(('● ' if is_category_active else '') + category_name,
+                  key=f'category_{idx:02d}',
+                  use_container_width=True,
+                  on_click=set_category, args=(category_name,))
+st.markdown('##### Indicadores da categoria')
 for row_start in range(0, len(indicator_names), 5):
     cols = st.columns(5, gap='small')
     for col, name in zip(cols, indicator_names[row_start:row_start + 5]):
@@ -567,17 +564,14 @@ for row_start in range(0, len(indicator_names), 5):
                       key=f'indicator_{list(INDICATORS).index(name):02d}',
                       use_container_width=True,
                       on_click=choose_indicator, args=(name,))
-
 indicator=st.session_state['selected_indicator']
 meta=INDICATORS[indicator]
-
 safe_title=html.escape(indicator)
 safe_desc=html.escape(meta['description'])
 safe_utility=html.escape(UTILITY.get(indicator, 'Permite comparar os países conforme a definição e a unidade deste indicador.'))
 safe_formula=html.escape(meta['formula'])
 safe_detail=html.escape(DETAILS[indicator])
 st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><p><strong>O que é:</strong> {safe_desc}</p><p><strong>Para que serve:</strong> {safe_utility}</p><p class="detail"><strong>Interpretação e limitações:</strong> {safe_detail}</p><div class="formula"><strong>Cálculo:</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
-
 if mode=='Ranking' and not chosen:
     st.warning('No grupo Personalizado, selecione ao menos um país no menu lateral.')
     st.stop()
@@ -585,7 +579,6 @@ if meta['code'] is None:
     st.info('📚 Indicador do catálogo ainda sem integração confirmada à fonte oficial. Não exibimos dados ou rankings simulados.')
     st.caption('Próxima etapa: integrar a fonte específica, validar unidades, anos e cobertura por país.')
     st.stop()
-
 code=meta['code']
 provider=meta.get('provider', 'Banco Mundial')
 try:
@@ -600,7 +593,6 @@ if mode=='Ranking':
 if data.empty:
     st.warning('Não há dados disponíveis para os países selecionados.')
     st.stop()
-
 if mode=='Ranking':
     years=sorted(data['Ano'].unique(),reverse=True)
     left,right=st.columns([1,1])
