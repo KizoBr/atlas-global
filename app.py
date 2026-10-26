@@ -9,11 +9,17 @@ import streamlit as st
 
 st.set_page_config(page_title="Atlas Global", page_icon="🌎", layout="wide")
 
+# Cache mensal: 30 dias contados a partir da primeira consulta armazenada.
+# Quando expira, a próxima visita faz uma nova consulta à fonte; não há
+# execução em segundo plano nem garantia de atualização das bases de origem.
+CACHE_MENSAL_SEGUNDOS = 30 * 24 * 60 * 60
+
+
 LATAM = {'ARG':'Argentina','BOL':'Bolívia','BRA':'Brasil','CHL':'Chile','COL':'Colômbia','CRI':'Costa Rica','CUB':'Cuba','DOM':'República Dominicana','ECU':'Equador','SLV':'El Salvador','GTM':'Guatemala','HTI':'Haiti','HND':'Honduras','MEX':'México','NIC':'Nicarágua','PAN':'Panamá','PRY':'Paraguai','PER':'Peru','URY':'Uruguai','VEN':'Venezuela'}
 BRICS = {'BRA':'Brasil','RUS':'Rússia','IND':'Índia','CHN':'China','ZAF':'África do Sul','EGY':'Egito','ETH':'Etiópia','IRN':'Irã','ARE':'Emirados Árabes Unidos','IDN':'Indonésia','SAU':'Arábia Saudita'}
 COUNTRIES = dict(sorted((LATAM | BRICS).items(), key=lambda item: item[1]))
 
-# Catálogo com 28 indicadores; 25 possuem integração programada (algumas fontes podem falhar).
+# Catálogo com 28 indicadores; 28 possuem integração programada (algumas fontes podem falhar).
 INDICATORS = {
     'PIB total': dict(code='NY.GDP.MKTP.CD', unit='US$ correntes', category='Economia e finanças públicas', description='Valor monetário dos bens e serviços finais produzidos dentro do país em um ano, a preços correntes.', formula='PIB = consumo + investimento + gasto do governo + exportações − importações.'),
     'PIB per capita (PPC)': dict(code='NY.GDP.PCAP.PP.KD', unit='dólares internacionais constantes', category='Economia e finanças públicas', description='Produção econômica real por habitante, corrigida pelas diferenças de poder de compra entre países.', formula='PIB real ajustado por PPC ÷ população.'),
@@ -22,7 +28,8 @@ INDICATORS = {
     'Taxa de desemprego': dict(code='SL.UEM.TOTL.ZS', unit='% da força de trabalho', category='Economia e finanças públicas', description='Parcela da força de trabalho sem emprego, disponível e procurando trabalho; série modelada pela OIT.', formula='Desempregados ÷ força de trabalho × 100.'),
     'Produtividade do trabalho': dict(code='labor-productivity-per-hour-pennworldtable', provider='OWID/Penn World Table', unit='dólares internacionais de 2021 por hora', category='Economia e finanças públicas', description='Produção econômica ajustada por preços e poder de compra em relação ao total de horas trabalhadas.', formula='PIB real em PPC ÷ total de horas trabalhadas.'),
     'Dívida pública (% do PIB)': dict(code='GGXWDG_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Dívida bruta do governo geral, relativa ao tamanho da economia.', formula='Dívida bruta do governo geral ÷ PIB × 100.'),
-    'Carga tributária (% do PIB)': dict(code=None, unit='% do PIB', category='Economia e finanças públicas', description='Receitas tributárias e contribuições sociais obrigatórias conforme metodologia harmonizada a definir.', formula='Receitas tributárias abrangidas ÷ PIB × 100.'),
+    'Carga tributária (% do PIB)': dict(code='OECD_TAX_GDP', provider='OCDE', unit='% do PIB', category='Economia e finanças públicas', description='Receita tributária total do governo geral, incluindo contribuições obrigatórias à seguridade social classificadas como tributos na metodologia harmonizada da OCDE.', formula='Receita tributária total (categorias tributárias da OCDE, incluindo contribuições sociais obrigatórias) ÷ PIB × 100.'),
+    'Receita tributária (% do PIB, sem contribuições)': dict(code='GC.TAX.TOTL.GD.ZS', unit='% do PIB', category='Economia e finanças públicas', description='Receitas com impostos, excluindo contribuições sociais segundo a definição das estatísticas fiscais do Banco Mundial/FMI.', formula='Receita tributária definida pela fonte ÷ PIB × 100. Não representa a carga tributária total, pois exclui contribuições sociais.'),
     'Gasto total do governo (% do PIB)': dict(code='GGX_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Despesas totais do governo geral, incluindo serviços, investimentos, transferências e demais funções.', formula='Despesa total do governo geral ÷ PIB × 100.'),
     'Expectativa de vida': dict(code='SP.DYN.LE00.IN', unit='anos', category='Saúde', description='Número médio de anos que um recém-nascido viveria sob as taxas de mortalidade do período.', formula='Estimativa de tábua de vida baseada em taxas de mortalidade por idade; não é uma simples média de idades ao morrer.'),
     'Mortalidade infantil': dict(code='SP.DYN.IMRT.IN', unit='óbitos por 1.000 nascidos vivos', category='Saúde', description='Probabilidade de morrer antes de completar um ano de idade, expressa por mil nascidos vivos.', formula='Probabilidade de óbito antes de 1 ano × 1.000 (estimativa de mortalidade).'),
@@ -37,11 +44,10 @@ INDICATORS = {
     'PISA — Leitura': dict(code='pisa_read', provider='OCDE / compilação PISA 2022', unit='pontos PISA', category='Educação', description='Pontuação média de estudantes de 15 anos em compreensão e utilização de textos, segundo o PISA da OCDE.', formula='Média estimada das pontuações de Leitura, com ponderações amostrais e valores plausíveis definidos pela OCDE.'),
     'PISA — Ciências': dict(code='pisa_science', provider='OCDE / compilação PISA 2022', unit='pontos PISA', category='Educação', description='Pontuação média de estudantes de 15 anos em conhecimentos e competências científicas, segundo o PISA da OCDE.', formula='Média estimada das pontuações de Ciências, com ponderações amostrais e valores plausíveis definidos pela OCDE.'),
     'Índice de Desenvolvimento Humano (IDH)': dict(code='hdi', provider='PNUD', unit='índice de 0 a 1', category='Desenvolvimento social', description='Índice sintético de saúde, educação e renda elaborado pelo PNUD.', formula='Média geométrica dos índices normalizados de saúde, educação e renda.'),
-    'Índice IRBES': dict(code=None, unit='índice metodológico do IBPT', category='Desenvolvimento social', description='Índice de Retorno de Bem-Estar à Sociedade do IBPT, que relaciona carga tributária e desenvolvimento humano.', formula='Cálculo específico publicado pelo IBPT; consultar a metodologia da edição antes de comparar.'),
     'Índice de Gini': dict(code='SI.POV.GINI', unit='pontos (0 a 100)', category='Desenvolvimento social', description='Mede a desigualdade na distribuição de renda ou consumo nas pesquisas domiciliares da fonte.', formula='Gini = área entre linha de igualdade e curva de Lorenz ÷ área total abaixo da linha de igualdade × 100.'),
     'Taxa de pobreza': dict(code='SI.POV.UMIC', unit='% da população', category='Desenvolvimento social', description='Parcela da população que vive com renda ou consumo inferior a US$ 8,30 por pessoa ao dia (PPC de 2021). É uma linha internacional de pobreza para países de renda média-alta, mais ampla que a de pobreza extrema.', formula='(Pessoas com renda ou consumo por pessoa abaixo de US$ 8,30/dia, PPC de 2021 ÷ população pesquisada) × 100.'),
     'Pessoas em situação de fome (subalimentação)': dict(code='SN.ITK.DEFC.ZS', unit='% da população', category='Desenvolvimento social', description='Parcela estimada da população cujo consumo habitual de energia alimentar é insuficiente para sustentar uma vida ativa e saudável, segundo a FAO.', formula='Estimativa estatística da proporção abaixo da necessidade mínima de energia alimentar, baseada na distribuição do consumo de energia alimentar; não é contagem direta de indivíduos.'),
-    'Índice Global de Crime Organizado': dict(code=None, unit='índice de 1 a 10', category='Segurança', description='Mede a presença e extensão de mercados e atores criminosos, conforme o Índice Global de Crime Organizado.', formula='Agregação de dimensões de criminalidade segundo a metodologia e ponderações da edição oficial.'),
+    'Índice Global de Crime Organizado': dict(code='ocindex_criminality', provider='GI-TOC', unit='índice de 1 a 10', category='Segurança', description='Mede a presença e extensão de mercados e atores criminosos, conforme o Índice Global de Crime Organizado.', formula='Agregação de dimensões de criminalidade segundo a metodologia e ponderações da edição oficial.'),
     'Homicídios intencionais (violência letal)': dict(code='VC.IHR.PSRC.P5', unit='por 100 mil habitantes', category='Segurança', description='Homicídios intencionais por 100 mil habitantes; indicador nacional de violência letal, não exclusivamente urbana.', formula='Número de homicídios intencionais ÷ população × 100.000.'),
 }
 
@@ -66,7 +72,6 @@ UTILITY = {
     'Expectativa de anos de escolaridade': 'Estima a duração provável do percurso escolar das novas gerações, sob as condições atuais de matrícula. Complementa a escolaridade média dos adultos.',
     'Matrícula no ensino superior (% bruta)': 'Compara o acesso agregado ao ensino terciário entre países. Por incluir matriculados de todas as idades, o valor pode superar 100%.',
     'Índice de Desenvolvimento Humano (IDH)': 'Resume dimensões de longevidade, educação e renda, permitindo comparações amplas de desenvolvimento humano. Não cobre diretamente desigualdade, segurança ou sustentabilidade.',
-    'Índice IRBES': 'Relaciona carga tributária e indicadores de bem-estar na metodologia do IBPT. A abrangência de países e edições pode ser restrita, e o índice não deve ser recalculado sem documentação oficial.',
     'Taxa de pobreza': 'Permite comparar a proporção de pessoas abaixo de uma linha internacional de pobreza mais ampla, inclusive em economias de renda média. Não equivale às linhas nacionais de pobreza e não mede a profundidade da privação.',
     'Pessoas em situação de fome (subalimentação)': 'Acompanha a insuficiência persistente de energia alimentar na população e contribui para avaliar segurança alimentar entre países e ao longo do tempo. Não mede diretamente cada episódio de fome ou a qualidade nutricional da dieta.',
     'Índice de Gini': 'Quantifica o grau de desigualdade na distribuição de renda ou consumo. Valores mais altos correspondem a maior desigualdade; pesquisas nacionais podem diferir em cobertura e conceito.',
@@ -79,7 +84,6 @@ UTILITY = {
 
 
 # Contexto metodológico adicional, exibido de forma compacta.
-DETAILS = {'PIB total': 'É registrado pelo critério territorial: conta a produção realizada no país, independentemente da nacionalidade das empresas. A ótica da despesa soma consumo das famílias, investimento, consumo do governo e exportações líquidas. Para avaliar bem-estar médio ou evolução real, complemente com PIB por habitante e séries a preços constantes.', 'PIB per capita (PPC)': 'A paridade de poder de compra ajusta diferenças de níveis de preços, permitindo comparar o volume real de bens e serviços entre economias. A série escolhida é expressa em dólares internacionais constantes; o ano-base depende da publicação da fonte. Como é uma média, não informa desigualdade, qualidade dos serviços públicos ou renda disponível das famílias.', 'Crescimento real do PIB': 'Compara o volume de produção em anos consecutivos, removendo a variação de preços por meio de deflatores. Taxas positivas indicam expansão e taxas negativas indicam contração. Um crescimento expressivo após uma recessão pode refletir recuperação de uma base baixa, e não necessariamente aceleração sustentada.', 'Inflação anual': 'O índice de preços ao consumidor acompanha a variação do custo de uma cesta representativa de bens e serviços. A série anual mede a variação média do índice ao longo do ano, que pode diferir da inflação acumulada em doze meses até dezembro. A cesta e os pesos variam entre países.', 'Taxa de desemprego': 'A força de trabalho reúne pessoas ocupadas e desempregadas; quem está fora dela não entra no denominador. Os dados internacionais harmonizados podem incluir estimativas modeladas pela OIT. Por isso, compare junto com participação no mercado de trabalho, informalidade e horas trabalhadas.', 'Produtividade do trabalho': 'O numerador usa valor adicionado ou PIB em termos reais, ajustado por paridade de poder de compra; o denominador é o total de horas efetivamente trabalhadas. Ganhos de produtividade podem decorrer de capital, tecnologia, organização ou composição setorial, não apenas do esforço individual. A cobertura e o método de harmonização ainda serão definidos na integração da fonte.', 'Dívida pública (% do PIB)': 'O governo geral abrange os níveis de governo e suas entidades cobertas pela metodologia fiscal. A dívida bruta contabiliza obrigações sem descontar integralmente ativos financeiros. O indicador é um estoque relativo ao PIB anual; juros, moeda, vencimentos e capacidade de arrecadação são fundamentais para avaliar risco fiscal.', 'Carga tributária (% do PIB)': 'A abrangência precisa incluir regras consistentes para impostos, taxas e contribuições sociais obrigatórias, pois diferentes fontes usam conceitos distintos. O indicador aproxima o peso da tributação na economia, mas não mostra quem paga, a progressividade nem a qualidade dos serviços financiados. A fonte harmonizada será definida antes da comparação.', 'Gasto total do governo (% do PIB)': 'O governo geral inclui despesas de diferentes esferas administrativas conforme as contas públicas da fonte. A medida incorpora remuneração, benefícios sociais, juros e investimentos, conforme o padrão estatístico adotado. Não é uma medida isolada do tamanho da burocracia, da eficiência ou da qualidade dos serviços públicos.', 'Expectativa de vida': 'É um indicador de período obtido pela aplicação das taxas correntes de mortalidade por idade a uma população hipotética. Não é uma previsão exata da duração de vida de quem nasceu naquele ano. Pode variar por crises sanitárias e mudanças de mortalidade, mesmo sem alterações imediatas na estrutura etária.', 'Mortalidade infantil': 'Apresenta a probabilidade estimada de morte antes do primeiro aniversário para cada mil nascimentos vivos. É sensível a condições materno-infantis, saneamento, atenção pré-natal e acesso ao sistema de saúde. As estimativas internacionais também buscam corrigir sub-registro e diferenças na qualidade dos registros vitais.', 'Gastos com saúde (% do PIB)': 'Abrange gastos correntes de governos, seguros, empresas e famílias com serviços e bens de saúde. Não equivale à despesa exclusivamente pública, nem incorpora necessariamente a formação de capital. Uma participação maior pode refletir prioridade de gasto, preços elevados, envelhecimento ou ineficiência, exigindo análise contextual.', 'Gastos com saúde por habitante': 'Divide o gasto corrente total em saúde pelo número de residentes e converte o resultado para dólares correntes. Facilita a comparação de escala financeira, mas taxas de câmbio e diferenças de preços afetam o resultado. Uma série PPC pode ser mais adequada para comparação do volume de serviços comprados.', 'Taxa de alfabetização de adultos': 'Considera pessoas de 15 anos ou mais e a capacidade de ler e escrever uma frase simples com compreensão, segundo a definição operacional da fonte. Pesquisas e censos podem utilizar perguntas e periodicidades diferentes. A medida não captura integralmente proficiência leitora, escolaridade ou alfabetização funcional.', 'Gastos públicos com educação (% do PIB)': 'Compara despesas governamentais em educação, de acordo com o escopo da fonte, com o valor total da produção econômica. Pode incluir diferentes níveis de ensino e despesas correntes e de capital. Não indica automaticamente qualidade, eficiência ou equidade do sistema educacional.', 'Anos médios de escolaridade': 'O indicador do PNUD considera adultos de 25 anos ou mais e estima o número médio de anos concluídos na educação formal. Séries históricas podem conter imputações e revisões, sobretudo onde censos e pesquisas não são anuais.', 'Expectativa de anos de escolaridade': 'É uma medida sintética construída com taxas de matrícula por idade, não uma previsão individual ou medida de aprendizagem. Mudanças de acesso à escola ou de organização do sistema podem alterar os resultados ao longo do tempo.', 'PISA — Matemática': 'As pontuações são estimativas obtidas por amostragem de estudantes de aproximadamente 15 anos. Nem todos os países participam; diferenças pequenas podem não ser estatisticamente significativas. Esta integração possui apenas resultados de 2022 e necessita validação contra a tabela oficial da OCDE. O gráfico mostra apenas os anos avaliados, sem interpolação.', 'PISA — Leitura': 'A média é estimada pela OCDE a partir de valores plausíveis e pesos amostrais. Mudanças de participação, cobertura e padrões de resposta exigem cautela na comparação. Esta integração possui apenas resultados de 2022; outros ciclos ainda não foram incorporados.', 'PISA — Ciências': 'A avaliação de Ciências mede capacidade de explicar fenômenos, interpretar dados e avaliar evidências, não apenas memorização. A pontuação depende de amostras e ajustes estatísticos e não deve ser interpretada como medida isolada de eficiência do gasto. A série integrada nesta etapa termina em 2022.', 'Matrícula no ensino superior (% bruta)': 'A taxa bruta de matrícula é o total de estudantes do ensino superior, sem limite de idade, dividido pela população do grupo etário de referência. Não informa quantos alunos concluem o curso, sua aprendizagem ou a qualidade da formação.', 'Índice de Desenvolvimento Humano (IDH)': 'A saúde é representada pela expectativa de vida ao nascer; a educação combina anos médios e esperados de escolaridade; e a dimensão econômica usa a renda nacional bruta per capita em PPC. Os componentes passam por normalização e são agregados por média geométrica. O IDH não capta diretamente desigualdades internas, liberdade, violência ou sustentabilidade ambiental.', 'Índice IRBES': 'O indicador do IBPT busca relacionar tributação e retorno percebido em bem-estar por meio de sua metodologia própria. Não é um índice universal calculado anualmente para todos os países. As séries devem respeitar exatamente as edições, a amostra e a fórmula que o IBPT efetivamente publicar; não serão atribuídos valores para países ausentes.', 'Taxa de pobreza': 'A linha de US$ 8,30 por pessoa ao dia (PPC de 2021) representa um padrão internacional de referência para economias de renda média-alta. Os dados usam renda ou consumo observados em pesquisas domiciliares. Diferem das linhas nacionais de pobreza e podem apresentar intervalos sem dados; revisões do Banco Mundial podem alterar séries históricas.', 'Pessoas em situação de fome (subalimentação)': 'O indicador da FAO, conhecido como prevalência de subalimentação, é uma estimativa baseada na disponibilidade ou consumo de calorias, na desigualdade de acesso alimentar e nas necessidades energéticas da população. Não equivale à insegurança alimentar moderada ou grave. Valores próximos ao limite inferior podem ser apresentados pela fonte como inferiores a 2,5%, exigindo cautela na comparação.', 'Índice de Gini': 'É derivado da curva de Lorenz, que ordena a população do menor para o maior valor de renda ou consumo e calcula sua parcela acumulada. Zero significa igualdade perfeita e cem representa desigualdade máxima teórica. A interpretação entre países exige verificar renda versus consumo, rendimentos brutos versus líquidos e qualidade das pesquisas domiciliares.', 'Índice Global de Crime Organizado': 'O índice publicado pela Global Initiative Against Transnational Organized Crime combina dimensões de mercados ilícitos e atores criminosos, a partir de critérios e avaliação estruturada. As pontuações não equivalem a quantidade de crimes registrados. O projeto mostrará apenas edições oficiais disponíveis, sem preencher anos intermediários.', 'Homicídios intencionais (violência letal)': 'O numerador considera mortes decorrentes de homicídio intencional segundo definições internacionais; o denominador é a população do período. É uma medida de violência letal comparável por tamanho populacional, mas não cobre integralmente roubos, agressões ou violência não letal. Além disso, é uma taxa nacional: não separa áreas urbanas e rurais.'}
 
 st.markdown('''<style>
 .stApp {background: #f5f7fb; color: #17233b;}
@@ -150,10 +154,10 @@ def nice_number(x, code):
         return f'{x / 1e9:,.1f}'.replace(',','X').replace('.',',').replace('X','.')
     return f'{x:,.2f}'.replace(',','X').replace('.',',').replace('X','.')
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_indicator(code):
     url=f'https://api.worldbank.org/v2/country/{";".join(COUNTRIES)}/indicator/{code}'
-    response=requests.get(url,params={'format':'json','per_page':20000,'date':'1960:2026'},timeout=45)
+    response=requests.get(url,params={'format':'json','per_page':20000,'date':f'1960:{date.today().year + 1}'},timeout=45)
     response.raise_for_status()
     payload=response.json()
     if not isinstance(payload,list) or len(payload)<2 or payload[1] is None:
@@ -171,7 +175,7 @@ DATA_COLUMNS = ['ISO3', 'País', 'Ano', 'Valor']
 IMF_ENDPOINTS = ['https://www.imf.org/external/datamapper/api/v2', 'https://www.imf.org/external/datamapper/api/v1']
 UNDP_HDI_CSV = 'https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Composite_indices_complete_time_series.csv'
 
-@st.cache_data(ttl=14400, show_spinner=False)
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_imf(code):
     if code not in ('GGXWDG_NGDP', 'GGX_NGDP'):
         raise ValueError('Indicador fiscal não reconhecido.')
@@ -219,7 +223,7 @@ def load_imf(code):
         )
     raise ValueError('O FMI não retornou dados válidos. ' + ' | '.join(failures))
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_undp_series(code):
     response = requests.get(UNDP_HDI_CSV, timeout=50)
     response.raise_for_status()
@@ -247,7 +251,7 @@ def load_undp_series(code):
         raise ValueError(f'Nenhum valor válido encontrado no PNUD para {code}.')
     return long[DATA_COLUMNS].reset_index(drop=True)
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_productivity():
     """Série de produtividade real/hora da Penn World Table via OWID Grapher."""
     url = 'https://ourworldindata.org/grapher/labor-productivity-per-hour-pennworldtable.csv'
@@ -292,7 +296,7 @@ PISA_ISO_ALIASES = {
     'honduras':'HND','haiti':'HTI','nicaragua':'NIC',
 }
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_pisa_series(code):
     """PISA 2022, três áreas distintas. Não interpolar ciclos faltantes.
 
@@ -330,8 +334,145 @@ def load_pisa_series(code):
         raise ValueError('Nenhuma pontuação PISA 2022 válida nos países cadastrados.')
     return result.reset_index(drop=True)
 
+
+# GI-TOC: edição 2025 em planilha Excel oficial. Leitura com biblioteca-padrão,
+# dispensando instalação adicional de openpyxl no Streamlit Community Cloud.
+OCINDEX_2025_URL = 'https://ocindex.net/assets/downloads/global_oc_index.xlsx'
+
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
+def load_ocindex_2025():
+    import zipfile
+    import xml.etree.ElementTree as ET
+    import unicodedata
+    from collections import defaultdict
+    response = requests.get(OCINDEX_2025_URL, timeout=60, headers={'User-Agent':'Mozilla/5.0'})
+    response.raise_for_status()
+    if not response.content.startswith(b'PK'):
+        raise ValueError('A fonte de crime organizado não retornou um arquivo Excel válido.')
+    ns = {'x': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+          'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
+    def norm(v):
+        txt = unicodedata.normalize('NFKD', str(v or ''))
+        return ' '.join(''.join(c for c in txt if not unicodedata.combining(c)).lower().replace('_',' ').split())
+    name_iso = {norm(n): iso for iso,n in COUNTRIES.items()}
+    name_iso.update({'brazil':'BRA','russia':'RUS','russian federation':'RUS',
+      'iran':'IRN','iran islamic republic':'IRN','venezuela':'VEN','venezuela rb':'VEN',
+      'bolivia':'BOL','bolivia plurinational state of':'BOL','turkiye':'TUR',
+      'egypt':'EGY','united arab emirates':'ARE','south africa':'ZAF',
+      'dominican republic':'DOM','saudi arabia':'SAU','costa rica':'CRI',
+      'el salvador':'SLV','ethiopia':'ETH','indonesia':'IDN','china':'CHN',
+      'india':'IND','mexico':'MEX','argentina':'ARG','colombia':'COL',
+      'peru':'PER','paraguay':'PRY','uruguay':'URY','chile':'CHL',
+      'guatemala':'GTM','honduras':'HND','haiti':'HTI','nicaragua':'NIC',
+      'panama':'PAN','ecuador':'ECU','cuba':'CUB'})
+    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+        ss=[]
+        if 'xl/sharedStrings.xml' in z.namelist():
+            root=ET.fromstring(z.read('xl/sharedStrings.xml'))
+            ss=[''.join(t.text or '' for t in si.findall('.//x:t',ns)) for si in root.findall('x:si',ns)]
+        sheets=sorted((x for x in z.namelist() if re.fullmatch(r'xl/worksheets/sheet\d+\.xml',x)),
+                      key=lambda x:int(re.search(r'sheet(\d+)',x).group(1)))
+        if not sheets:
+            raise ValueError('Planilha do índice sem abas tabulares reconhecidas.')
+        for sh in sheets:
+            root=ET.fromstring(z.read(sh))
+            rows=[]
+            for row in root.findall('.//x:sheetData/x:row',ns):
+                cells={}
+                for c in row.findall('x:c',ns):
+                    ref=c.get('r','A1')
+                    letters=re.match(r'[A-Z]+',ref)
+                    if not letters: continue
+                    ix=0
+                    for ch in letters.group(): ix=ix*26+ord(ch)-64
+                    v=c.find('x:v',ns)
+                    inline=c.find('x:is',ns)
+                    if c.get('t')=='s' and v is not None:
+                        try: value=ss[int(v.text)]
+                        except (ValueError,IndexError,TypeError): value=''
+                    elif inline is not None:
+                        value=''.join(t.text or '' for t in inline.findall('.//x:t',ns))
+                    else: value=v.text if v is not None else ''
+                    cells[ix-1]=value
+                if cells: rows.append(cells)
+            # Detect explicit country column and overall criminality score;
+            # never use subindex of resilience or market crime as the main score.
+            for hidx, hdr in enumerate(rows[:16]):
+                cols={i:norm(v) for i,v in hdr.items()}
+                country_col=next((i for i,v in cols.items() if v in ('country','country name','countries','economy','economy name','state')),None)
+                iso_col=next((i for i,v in cols.items() if v in ('iso3','iso 3','iso code','iso3 code','country code')),None)
+                score_col=next((i for i,v in cols.items() if v in ('criminality','criminality score','overall criminality','overall criminality score','criminality index','criminality index score')),None)
+                if score_col is None or (country_col is None and iso_col is None): continue
+                result=[]
+                for record in rows[hidx+1:]:
+                    iso=str(record.get(iso_col,'')).strip().upper() if iso_col is not None else ''
+                    if iso not in COUNTRIES:
+                        iso=name_iso.get(norm(record.get(country_col,''))) if country_col is not None else None
+                    if iso not in COUNTRIES: continue
+                    try: value=float(str(record.get(score_col,'')).replace(',','.'))
+                    except (TypeError,ValueError): continue
+                    if not 1 <= value <= 10: continue
+                    result.append({'ISO3':iso,'País':COUNTRIES[iso], 'Ano':2025,'Valor':value})
+                if result:
+                    return pd.DataFrame(result, columns=DATA_COLUMNS).drop_duplicates(['ISO3','Ano'])
+    raise ValueError('A planilha oficial foi obtida, mas sua estrutura não corresponde ao formato esperado. Não foram inferidas pontuações; é necessário ajustar o leitor à edição atual.')
+
+
+# Receita tributária harmonizada da OCDE, com contribuições sociais obrigatórias.
+# Conjunto Global Revenue Statistics, séries do governo geral como % do PIB.
+OECD_TAX_URL = (
+    'https://sdmx.oecd.org/public/rest/data/'
+    'OECD.CTP.TPS,DSD_REV_COMP_GLOBAL@DF_RSGLOBAL,2.1/'
+    '..S13._T..PT_B1GQ.A'
+)
+
+@st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
+def load_oecd_tax():
+    try:
+        response = requests.get(
+            OECD_TAX_URL,
+            params={'startPeriod': '1990', 'dimensionAtObservation': 'AllDimensions'},
+            headers={'Accept': 'csvfile', 'User-Agent': 'AtlasGlobal/1.0 (public data dashboard)'},
+            timeout=70,
+        )
+        response.raise_for_status()
+    except requests.RequestException as err:
+        raise ValueError(f'Não foi possível consultar a API de receita tributária da OCDE: {err}') from err
+    try:
+        df = pd.read_csv(io.BytesIO(response.content), low_memory=False, dtype={'REF_AREA': str})
+    except (pd.errors.ParserError, UnicodeError, ValueError) as err:
+        raise ValueError(f'A OCDE não retornou um CSV legível: {err}') from err
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    required = {'REF_AREA', 'TIME_PERIOD', 'OBS_VALUE'}
+    if not required.issubset(df.columns):
+        raise ValueError('O formato da API da OCDE mudou: faltam REF_AREA, TIME_PERIOD ou OBS_VALUE.')
+    # A consulta já solicita setor governo geral e categoria tributária TOTAL.
+    # Confirmar essas dimensões novamente se estiverem presentes no CSV.
+    if 'INSTITUTIONAL_SECTOR' in df.columns:
+        df = df.loc[df['INSTITUTIONAL_SECTOR'].astype(str).eq('S13')]
+    if 'TAX_CATEGORY' in df.columns:
+        df = df.loc[df['TAX_CATEGORY'].astype(str).eq('_T')]
+    if 'UNIT_MEASURE' in df.columns:
+        df = df.loc[df['UNIT_MEASURE'].astype(str).eq('PT_B1GQ')]
+    df['REF_AREA'] = df['REF_AREA'].astype(str).str.upper().str.strip()
+    df = df.loc[df['REF_AREA'].isin(COUNTRIES)].copy()
+    df['Ano'] = pd.to_numeric(df['TIME_PERIOD'], errors='coerce')
+    df['Valor'] = pd.to_numeric(df['OBS_VALUE'], errors='coerce')
+    df = df.dropna(subset=['Ano','Valor'])
+    if df.empty:
+        raise ValueError('A OCDE não retornou dados para os países do Atlas Global. Verifique a cobertura ou a consulta SDMX.')
+    df['Ano'] = df['Ano'].astype(int)
+    df['ISO3'] = df['REF_AREA']
+    df['País'] = df['ISO3'].map(COUNTRIES)
+    df = df.sort_values(['ISO3','Ano']).drop_duplicates(['ISO3','Ano'], keep='last')
+    return df[DATA_COLUMNS].reset_index(drop=True)
+
 def load_data(meta):
     provider = meta.get('provider', 'Banco Mundial')
+    if provider == 'OCDE':
+        return load_oecd_tax()
+    if provider == 'GI-TOC':
+        return load_ocindex_2025()
     if provider == 'FMI':
         return load_imf(meta['code'])
     if provider == 'PNUD':
@@ -343,7 +484,7 @@ def load_data(meta):
     return load_indicator(meta['code'])
 
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p class="byline">Criado por Rafael Pires Marciano</p><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
-st.caption('Catálogo: 28 indicadores · 25 com integração programada · 3 ainda pendentes. A disponibilidade depende de cada fonte.')
+st.caption('Catálogo: 28 indicadores · 28 com integração programada · integrações externas sujeitas a validação. Consultas em cache por até 30 dias; cobertura conforme a fonte.')
 
 # Escolha a categoria e depois apenas um indicador dentro dela.
 # A categoria aparece na área principal, preservando espaço para o ranking.
@@ -468,6 +609,12 @@ if mode=='Ranking':
     ranking.insert(0,'Posição',range(1,len(ranking)+1))
     missing=[COUNTRIES[c] for c in chosen if c not in set(ranking['ISO3'])]
     st.caption(f'{len(ranking)} de {len(chosen)} países com dados em {year} · Fonte: {provider} · Série: {code}')
+    if provider == 'GI-TOC':
+        st.caption('GI-TOC: edição oficial de 2025; índice de criminalidade (1–10), não confundir com resiliência institucional. Outras edições ainda não integradas.')
+    if provider == 'OCDE':
+        st.caption('OCDE Global Revenue Statistics: receita tributária total do governo geral, com contribuições sociais obrigatórias conforme a classificação da OCDE. Cobertura varia por país e ano.')
+    if code == 'GC.TAX.TOTL.GD.ZS':
+        st.warning('Esta série de RECEITA TRIBUTÁRIA exclui contribuições sociais; não corresponde à carga tributária total. Ela aparece como indicador separado.')
     if provider == 'FMI' and int(year) >= date.today().year:
         st.caption('FMI: valores do ano corrente podem ser estimativas ou projeções, conforme a edição disponível.')
     if provider == 'PNUD':
