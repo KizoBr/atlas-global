@@ -1,4 +1,5 @@
 import html
+import re
 import requests
 import pandas as pd
 import plotly.express as px
@@ -38,17 +39,45 @@ INDICATORS = {
     'Homicídios intencionais (violência letal)': dict(code='VC.IHR.PSRC.P5', unit='por 100 mil habitantes', category='Segurança', description='Homicídios intencionais por 100 mil habitantes; indicador nacional de violência letal, não exclusivamente urbana.', formula='Número de homicídios intencionais ÷ população × 100.000.'),
 }
 
+# Explicações editoriais: significado, utilidade e método de cálculo.
+UTILITY = {
+    'PIB total': 'Dimensiona o tamanho da economia e permite comparações de escala produtiva. Por usar dólares correntes, a série também responde a mudanças cambiais e à inflação.',
+    'PIB per capita (PPC)': 'Ajuda a comparar a produção econômica média por habitante, descontando diferenças de preços entre países. Não representa a renda efetivamente recebida por cada pessoa nem sua distribuição.',
+    'Crescimento real do PIB': 'Mostra a expansão ou contração da atividade econômica sem o efeito da inflação. É útil para acompanhar ciclos econômicos e o ritmo de crescimento.',
+    'Inflação anual': 'Indica a evolução do custo médio de uma cesta de consumo. É útil para avaliar estabilidade de preços e perda de poder de compra da moeda.',
+    'Taxa de desemprego': 'Permite acompanhar a parcela da força de trabalho sem ocupação, segundo critérios internacionais. Não mede, isoladamente, informalidade ou subocupação.',
+    'Produtividade do trabalho': 'Avalia a produção econômica gerada por hora trabalhada e permite estudar eficiência produtiva e crescimento de longo prazo. Diferenças setoriais e de mensuração importam.',
+    'Dívida pública (% do PIB)': 'Compara a dívida bruta do governo geral ao tamanho da economia. É útil para observar a evolução do endividamento, mas não basta, isoladamente, para concluir sobre sustentabilidade fiscal.',
+    'Carga tributária (% do PIB)': 'Mostra o peso da arrecadação tributária em relação à atividade econômica. Permite comparar estruturas fiscais, respeitando diferenças de abrangência e contribuições sociais.',
+    'Gasto total do governo (% do PIB)': 'Mede quanto o governo geral despende em proporção à economia, incluindo serviços, benefícios, investimentos e outras despesas. Não equivale apenas ao custo da burocracia.',
+    'Expectativa de vida': 'Sintetiza as condições de mortalidade de uma população em determinado período. É útil para acompanhar resultados de saúde, saneamento e condições sociais.',
+    'Mortalidade infantil': 'Indica o risco de morte antes do primeiro aniversário. É amplamente utilizada para acompanhar saúde materno-infantil e condições de vida.',
+    'Gastos com saúde (% do PIB)': 'Mostra a proporção dos recursos econômicos destinados a despesas correntes de saúde. Não indica, isoladamente, a qualidade dos serviços prestados.',
+    'Gastos com saúde por habitante': 'Permite comparar o volume médio de recursos correntes de saúde por pessoa. Como usa dólares correntes, taxas de câmbio podem afetar comparações históricas.',
+    'Taxa de alfabetização de adultos': 'Acompanha a proporção de adultos capazes de ler e escrever uma mensagem simples. Não mede diretamente proficiência ou qualidade da aprendizagem.',
+    'Gastos públicos com educação (% do PIB)': 'Apresenta o esforço financeiro público em educação relativamente ao PIB. A qualidade e a distribuição dos gastos exigem outras medidas.',
+    'Gasto público por aluno — primário': 'Compara recursos públicos por estudante do ensino primário. Pode ajudar a analisar financiamento, sem determinar isoladamente os resultados educacionais.',
+    'Gasto público por aluno — secundário': 'Compara recursos públicos por estudante do ensino secundário, com ajuste por poder de compra conforme a fonte.',
+    'Gasto público por aluno — superior': 'Compara recursos públicos por estudante do ensino superior, considerando a definição de gasto e matrícula adotada pela fonte.',
+    'Índice de Desenvolvimento Humano (IDH)': 'Resume dimensões de longevidade, educação e renda, permitindo comparações amplas de desenvolvimento humano. Não cobre diretamente desigualdade, segurança ou sustentabilidade.',
+    'Índice IRBES': 'Relaciona carga tributária e indicadores de bem-estar na metodologia do IBPT. A abrangência de países e edições pode ser restrita, e o índice não deve ser recalculado sem documentação oficial.',
+    'Índice de Gini': 'Quantifica o grau de desigualdade na distribuição de renda ou consumo. Valores mais altos correspondem a maior desigualdade; pesquisas nacionais podem diferir em cobertura e conceito.',
+    'Índice Global de Crime Organizado': 'Avalia dimensões de mercados e atores criminosos, úteis para comparações internacionais. Trata-se de índice composto de avaliação, não de uma contagem direta de crimes.',
+    'Homicídios intencionais (violência letal)': 'Compara a intensidade da violência letal entre países considerando o tamanho populacional. A medida é nacional e não representa apenas a violência urbana.',
+}
+
 st.markdown('''<style>
 .stApp {background: #f5f7fb; color: #17233b;}
-.block-container {max-width: 1260px; padding-top: 1.6rem;}
+.block-container {max-width: 1260px; padding-top: 1.5rem;}
 .hero {background:linear-gradient(125deg,#101e3c,#243e68);border-radius:18px;padding:24px 28px;margin-bottom:20px;color:white;}
-.hero h1{font-size:2.1rem;margin:0;color:#fff;letter-spacing:.01em;}
+.hero h1{font-size:2.1rem;margin:0;color:#fff;}
 .hero p{color:#d7e2f2;margin:7px 0 0;}
-.indicator-head {border-left:6px solid #d3a83d;background:white;padding:18px 22px;border-radius:10px;margin:10px 0 16px;box-shadow:0 4px 18px #17233b0b;}
-.indicator-head h2 {font-size:1.72rem;line-height:1.2;margin:5px 0;color:#17233b;}
-.eyebrow {text-transform:uppercase;font-size:.77rem;letter-spacing:.13em;font-weight:750;color:#8a6b20;}
-.indicator-head p{margin:6px 0;color:#33415a;}
-.formula {font-size:.93rem;background:#f3f5fa;padding:9px 11px;border-radius:7px;margin-top:10px;color:#253451;}
+.indicator-head {border-left:7px solid #1a4d89;background:white;padding:25px 28px;border-radius:12px;margin:14px 0 23px;box-shadow:0 4px 18px #17233b12;}
+.indicator-head h2 {font-size:2.15rem;line-height:1.2;margin:7px 0 17px;color:#142c52;}
+.eyebrow {text-transform:uppercase;font-size:.82rem;letter-spacing:.12em;font-weight:800;color:#23599b;}
+.indicator-head p{margin:8px 0 15px;color:#293c58;font-size:1.08rem;line-height:1.7;}
+.indicator-head h3 {font-size:1.05rem;font-weight:800;margin:15px 0 4px;color:#173963;}
+.formula {font-size:1.05rem;background:#eef4fb;padding:15px 17px;border-radius:9px;margin-top:12px;color:#193654;line-height:1.65;}
 .ranking-shell {overflow-x:auto;background:white;border-radius:15px;box-shadow:0 5px 24px #18234014;padding:6px;margin-top:12px;}
 .ranking-table {width:100%;border-collapse:separate;border-spacing:0;min-width:500px;font-size:1.04rem;color:#17233b;}
 .ranking-table th {background:#e9eef6;color:#17233b;text-transform:uppercase;letter-spacing:.04em;font-size:.86rem;padding:16px 12px;text-align:left;}
@@ -60,15 +89,28 @@ st.markdown('''<style>
 .ranking-table tbody tr.brazil td{background:linear-gradient(90deg,#f6df9a,#dfb84e);font-weight:800;color:#1d2637;border-bottom-color:#cca444;}
 .ranking-table tbody tr.brazil td:first-child{border-radius:8px 0 0 8px;}
 .ranking-table tbody tr.brazil td:last-child{border-radius:0 8px 8px 0;}
-.flag{display:inline-block;margin-right:12px;font-size:1.22rem;}
+.flag-img {width:29px;height:20px;object-fit:cover;vertical-align:middle;margin-right:12px;border:1px solid #d9e0e9;border-radius:2px;}
 .smallnote{font-size:.88rem;color:#66728b;margin:9px 0 4px;}
 div[data-testid="stSelectbox"] label p {font-size:1.08rem;font-weight:800;color:#182b4b;}
+/* Estilo azul-marinho na barra lateral; textos brancos e ações azuis. */
+section[data-testid="stSidebar"] {background:#102c53;}
+section[data-testid="stSidebar"] h1,section[data-testid="stSidebar"] h2,section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label,section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {color:#fff!important;}
+section[data-testid="stSidebar"] [data-baseweb="tag"]{background:#245eab!important;}
+section[data-testid="stSidebar"] [data-baseweb="tag"] span {color:#fff!important;}
+section[data-testid="stSidebar"] [data-baseweb="radio"] > div:first-child {border-color:#73aaff;}
+section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] [data-baseweb="radio"] > div:first-child {background:#2364b3!important;}
+section[data-testid="stSidebar"] button[kind="primary"],section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {background:#2364b3!important;color:white!important;border:0;}
+section[data-testid="stSidebar"] input {color:#1a2d49!important;}
 </style>''',unsafe_allow_html=True)
 
-FLAG_OVERRIDE = {'CHN':'🇨🇳','IND':'🇮🇳','BRA':'🇧🇷','RUS':'🇷🇺','ZAF':'🇿🇦','EGY':'🇪🇬','ETH':'🇪🇹','IRN':'🇮🇷','ARE':'🇦🇪','IDN':'🇮🇩','SAU':'🇸🇦'}
-def flag(iso3):
-    iso2 = {'ARG':'AR','BOL':'BO','BRA':'BR','CHL':'CL','COL':'CO','CRI':'CR','CUB':'CU','DOM':'DO','ECU':'EC','SLV':'SV','GTM':'GT','HTI':'HT','HND':'HN','MEX':'MX','NIC':'NI','PAN':'PA','PRY':'PY','PER':'PE','URY':'UY','VEN':'VE','RUS':'RU','IND':'IN','CHN':'CN','ZAF':'ZA','EGY':'EG','ETH':'ET','IRN':'IR','ARE':'AE','IDN':'ID','SAU':'SA'}.get(iso3)
-    return ''.join(chr(127397+ord(char)) for char in iso2) if iso2 else '🌐'
+ISO2 = {'ARG':'ar','BOL':'bo','BRA':'br','CHL':'cl','COL':'co','CRI':'cr','CUB':'cu','DOM':'do','ECU':'ec','SLV':'sv','GTM':'gt','HTI':'ht','HND':'hn','MEX':'mx','NIC':'ni','PAN':'pa','PRY':'py','PER':'pe','URY':'uy','VEN':'ve','RUS':'ru','IND':'in','CHN':'cn','ZAF':'za','EGY':'eg','ETH':'et','IRN':'ir','ARE':'ae','IDN':'id','SAU':'sa'}
+def flag_image(iso3, name):
+    iso2 = ISO2.get(iso3)
+    if not iso2:
+        return ''
+    return f'<img class="flag-img" src="https://flagcdn.com/w40/{iso2}.png" alt="Bandeira de {html.escape(name, quote=True)}" loading="lazy">'
 
 def nice_number(x, code):
     # Conservar casas decimais úteis e a unidade no cabeçalho da tabela.
@@ -104,15 +146,21 @@ with st.sidebar:
     st.header('Configurações')
     group=st.radio('Grupo de países',['Todos','América Latina','BRICS'])
     universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
-    chosen=st.multiselect('Países',list(universe),default=list(universe),format_func=lambda iso:universe[iso])
     mode=st.radio('Visualização',['Ranking','Evolução histórica'])
+    # A escolha lateral vale somente para os rankings.
+    if mode=='Ranking':
+        chosen=st.multiselect('Países do ranking',list(universe),default=list(universe),format_func=lambda iso:universe[iso])
+    else:
+        chosen=[]
+        st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
 
 safe_title=html.escape(indicator)
 safe_desc=html.escape(meta['description'])
+safe_utility=html.escape(UTILITY.get(indicator, 'Permite comparar os países conforme a definição e a unidade deste indicador.'))
 safe_formula=html.escape(meta['formula'])
-st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><p>{safe_desc}</p><div class="formula"><strong>Cálculo / metodologia:</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
+st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><h3>O que é?</h3><p>{safe_desc}</p><h3>Para que serve?</h3><p>{safe_utility}</p><div class="formula"><strong>Como é calculado?</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
 
-if not chosen:
+if mode=='Ranking' and not chosen:
     st.warning('Selecione ao menos um país no menu lateral.')
     st.stop()
 if meta['code'] is None:
@@ -127,7 +175,8 @@ try:
 except (requests.RequestException,ValueError) as error:
     st.error(f'Não foi possível obter os dados do Banco Mundial: {error}')
     st.stop()
-data=data[data['ISO3'].isin(chosen)]
+if mode=='Ranking':
+    data=data[data['ISO3'].isin(chosen)]
 if data.empty:
     st.warning('Não há dados disponíveis para os países selecionados.')
     st.stop()
@@ -149,37 +198,50 @@ if mode=='Ranking':
     for _,row in ranking.iterrows():
         css=' class="brazil"' if row['ISO3']=='BRA' else ''
         country=html.escape(str(row['País']))
-        table_html+=f'<tr{css}><td>{int(row["Posição"])}º</td><td><span class="flag">{flag(row["ISO3"])}</span>{country}</td><td>{nice_number(row["Valor"],code)}</td></tr>'
+        table_html+=f'<tr{css}><td>{int(row["Posição"])}º</td><td><span class="flag">{flag_image(row['ISO3'], str(row['País']))}</span>{country}</td><td>{nice_number(row["Valor"],code)}</td></tr>'
     table_html+='</tbody></table>'
     st.subheader(head)
     st.markdown(f'<div class="ranking-shell">{table_html}</div>',unsafe_allow_html=True)
     if missing:
         st.warning('Sem dados para o ano escolhido: '+', '.join(sorted(missing)))
-    if not ranking.empty:
-        colors=['#c89c2f' if iso=='BRA' else '#32557e' for iso in ranking['ISO3']]
-        fig=px.bar(ranking,x='Valor',y='País',orientation='h',title=f'{indicator} — {year}')
-        fig.update_traces(marker_color=colors)
-        fig.update_layout(yaxis={'categoryorder':'array','categoryarray':list(reversed(ranking['País']))},height=max(400,32*len(ranking)),paper_bgcolor='#f5f7fb')
-        st.plotly_chart(fig,use_container_width=True)
     csv=ranking[['Posição','País','Ano','Valor']].to_csv(index=False).encode('utf-8-sig')
     st.download_button('Baixar ranking (CSV)',csv,file_name=f'ranking_{code}_{year}.csv',mime='text/csv')
 else:
-    minyear,maxyear=int(data['Ano'].min()),int(data['Ano'].max())
-    if minyear==maxyear:
-        start=end=minyear
-        st.caption(f'Apenas {minyear} disponível para esta seleção.')
+    st.subheader('Evolução histórica')
+    st.caption('Escolha de 1 a 5 países para montar o gráfico. O gráfico começa vazio.')
+    options=list(universe)
+    selected_history=st.multiselect(
+        'Países para comparar (máximo de 5)',
+        options,
+        default=[],
+        format_func=lambda iso:universe[iso],
+        max_selections=5,
+        key='historical_countries',
+    )
+    if not selected_history:
+        st.info('Selecione os países acima para visualizar a evolução histórica deste indicador.')
     else:
-        start,end=st.slider('Período',min_value=minyear,max_value=maxyear,value=(max(minyear,maxyear-20),maxyear))
-    history=data[data['Ano'].between(start,end)].sort_values(['País','Ano'])
-    if history.empty:
-        st.warning('Sem dados no período escolhido.')
-    else:
-        fig=px.line(history,x='Ano',y='Valor',color='País',markers=True,title=indicator)
-        fig.update_layout(yaxis_title=meta['unit'],paper_bgcolor='#f5f7fb')
-        if 'Brasil' in history['País'].values:
-            fig.for_each_trace(lambda trace: trace.update(line={'width':4},marker={'size':9}) if trace.name=='Brasil' else None)
-        st.plotly_chart(fig,use_container_width=True)
-        st.dataframe(history[['País','Ano','Valor']],hide_index=True,use_container_width=True)
-        csv=history[['País','Ano','Valor']].to_csv(index=False).encode('utf-8-sig')
-        st.download_button('Baixar série histórica (CSV)',csv,file_name=f'historico_{code}.csv',mime='text/csv')
+        history_data=data[data['ISO3'].isin(selected_history)]
+        if history_data.empty:
+            st.warning('Não há dados para os países selecionados.')
+        else:
+            minyear,maxyear=int(history_data['Ano'].min()),int(history_data['Ano'].max())
+            if minyear==maxyear:
+                start=end=minyear
+                st.caption(f'Apenas {minyear} disponível para esta seleção.')
+            else:
+                start,end=st.slider('Período',min_value=minyear,max_value=maxyear,value=(max(minyear,maxyear-20),maxyear))
+            history=history_data[history_data['Ano'].between(start,end)].sort_values(['País','Ano'])
+            if history.empty:
+                st.warning('Sem dados no período escolhido.')
+            else:
+                fig=px.line(history,x='Ano',y='Valor',color='País',markers=True,title=indicator)
+                fig.update_layout(yaxis_title=meta['unit'],paper_bgcolor='#f5f7fb')
+                if 'Brasil' in history['País'].values:
+                    fig.for_each_trace(lambda trace: trace.update(line={'width':4},marker={'size':9}) if trace.name=='Brasil' else None)
+                st.plotly_chart(fig,use_container_width=True)
+                with st.expander('Ver dados da evolução histórica'):
+                    st.dataframe(history[['País','Ano','Valor']],hide_index=True,use_container_width=True)
+                csv=history[['País','Ano','Valor']].to_csv(index=False).encode('utf-8-sig')
+                st.download_button('Baixar série histórica (CSV)',csv,file_name=f'historico_{code}.csv',mime='text/csv')
 st.caption('Observação: dados sujeitos a revisão, anos sem informação não são preenchidos e maior valor nem sempre significa melhor resultado.')
