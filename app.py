@@ -69,15 +69,15 @@ UTILITY = {
 st.markdown('''<style>
 .stApp {background: #f5f7fb; color: #17233b;}
 .block-container {max-width: 1260px; padding-top: 1.5rem;}
-.hero {background:linear-gradient(125deg,#101e3c,#243e68);border-radius:18px;padding:24px 28px;margin-bottom:20px;color:white;}
-.hero h1{font-size:2.1rem;margin:0;color:#fff;}
+.hero {background:linear-gradient(125deg,#101e3c,#243e68);border-radius:18px;padding:17px 23px;margin-bottom:12px;color:white;}
+.hero h1{font-size:1.8rem;margin:0;color:#fff;}
 .hero p{color:#d7e2f2;margin:7px 0 0;}
-.indicator-head {border-left:7px solid #1a4d89;background:white;padding:25px 28px;border-radius:12px;margin:14px 0 23px;box-shadow:0 4px 18px #17233b12;}
-.indicator-head h2 {font-size:2.15rem;line-height:1.2;margin:7px 0 17px;color:#142c52;}
-.eyebrow {text-transform:uppercase;font-size:.82rem;letter-spacing:.12em;font-weight:800;color:#23599b;}
-.indicator-head p{margin:8px 0 15px;color:#293c58;font-size:1.08rem;line-height:1.7;}
-.indicator-head h3 {font-size:1.05rem;font-weight:800;margin:15px 0 4px;color:#173963;}
-.formula {font-size:1.05rem;background:#eef4fb;padding:15px 17px;border-radius:9px;margin-top:12px;color:#193654;line-height:1.65;}
+.indicator-head {border-left:4px solid #1a4d89;background:white;padding:13px 18px;border-radius:10px;margin:8px 0 13px;box-shadow:0 4px 18px #17233b12;}
+.indicator-head h2 {font-size:1.48rem;line-height:1.2;margin:4px 0 8px;color:#142c52;}
+.eyebrow {text-transform:uppercase;font-size:.69rem;letter-spacing:.09em;font-weight:800;color:#23599b;}
+.indicator-head p{margin:3px 0 6px;color:#293c58;font-size:.86rem;line-height:1.43;}
+.indicator-head h3 {font-size:.87rem;font-weight:750;margin:7px 0 2px;color:#173963;}
+.formula {font-size:.85rem;background:#eef4fb;padding:8px 11px;border-radius:8px;margin-top:7px;color:#193654;line-height:1.45;}
 .ranking-shell {overflow-x:auto;background:white;border-radius:15px;box-shadow:0 5px 24px #18234014;padding:6px;margin-top:12px;}
 .ranking-table {width:100%;border-collapse:separate;border-spacing:0;min-width:500px;font-size:1.04rem;color:#17233b;}
 .ranking-table th {background:#e9eef6;color:#17233b;text-transform:uppercase;letter-spacing:.04em;font-size:.86rem;padding:16px 12px;text-align:left;}
@@ -158,46 +158,29 @@ for pos, name in enumerate(indicator_names):
     background = CATEGORY_COLORS[INDICATORS[name]['category']]
     selected = st.session_state['selected_indicator'] == name
     key = f'indicator_{pos:02d}'
-    border = '3px solid #173d72' if selected else '1px solid #dbe4ef'
+    border = '2px solid #17477f' if selected else '1px solid #d7e0e9'
     weight = '800' if selected else '550'
     style_rules.append(
-        f'section[data-testid="stSidebar"] .st-key-{key} button {{'
-        f'background:{background}!important;color:#122b48!important;'
-        f'border:{border}!important;border-radius:9px!important;'
-        f'font-weight:{weight}!important;text-align:left!important;'
-        'width:100%!important;min-height:40px!important;white-space:normal!important;'
-        'height:auto!important;padding:8px 10px!important;'
-        'box-shadow:none!important;}'
+        f'.st-key-{key} button {{'
+        f'background:{background}!important;color:#18304c!important;'
+        f'border:{border}!important;border-radius:7px!important;'
+        f'font-weight:{weight}!important;text-align:center!important;'
+        'width:100%!important;min-height:31px!important;'
+        'height:auto!important;padding:5px 7px!important;'
+        'box-shadow:none!important;line-height:1.15!important;}'
     )
     style_rules.append(
-        f'section[data-testid="stSidebar"] .st-key-{key} button p {{'
-        'color:#122b48!important;white-space:normal!important;text-align:left!important;}'
+        f'.st-key-{key} button p {{'
+        'font-size:.73rem!important;color:#18304c!important;'
+        'line-height:1.15!important;white-space:normal!important;text-align:center!important;}'
     )
     if selected:
         style_rules.append(
-            f'section[data-testid="stSidebar"] .st-key-{key} button {{'
-            'box-shadow:0 0 0 2px #c4dafa!important;}'
+            f'.st-key-{key} button {{box-shadow:0 0 0 1px #17477f!important;}}'
         )
 st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header('Indicadores')
-    st.caption('Escolha um indicador. As cores representam as categorias; somente um pode ficar ativo.')
-    st.markdown("""<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;font-size:11px;">
-    <span style="background:#DCEEFF;padding:3px 7px;border-radius:5px;">Economia</span>
-    <span style="background:#FFE0E0;padding:3px 7px;border-radius:5px;">Saúde</span>
-    <span style="background:#ECE3FF;padding:3px 7px;border-radius:5px;">Educação</span>
-    <span style="background:#E1F3E9;padding:3px 7px;border-radius:5px;">Social</span>
-    <span style="background:#FFF0D5;padding:3px 7px;border-radius:5px;">Segurança</span>
-    </div>""", unsafe_allow_html=True)
-    # Rolagem interna preserva espaço para os filtros de países.
-    with st.container(height=390, border=True):
-        for pos, name in enumerate(indicator_names):
-            is_active = st.session_state['selected_indicator'] == name
-            title = ('✓  ' if is_active else '') + name
-            st.button(title, key=f'indicator_{pos:02d}', use_container_width=True,
-                      on_click=choose_indicator, args=(name,))
-    st.divider()
     st.header('Configurações')
     group=st.radio('Grupo de países',['Todos','América Latina','BRICS'])
     universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
@@ -208,6 +191,18 @@ with st.sidebar:
         chosen=[]
         st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
 
+# Botões temáticos compactos: uma única seleção, sem divisão por categoria.
+st.markdown('#### Escolha o indicador')
+for row_start in range(0, len(indicator_names), 5):
+    cols=st.columns(5, gap='small')
+    for col, pos in zip(cols, range(row_start, min(row_start+5, len(indicator_names)))):
+        name=indicator_names[pos]
+        is_active=st.session_state['selected_indicator']==name
+        with col:
+            st.button(('✓ ' if is_active else '')+name,
+                      key=f'indicator_{pos:02d}', use_container_width=True,
+                      on_click=choose_indicator, args=(name,))
+
 indicator=st.session_state['selected_indicator']
 meta=INDICATORS[indicator]
 
@@ -215,7 +210,7 @@ safe_title=html.escape(indicator)
 safe_desc=html.escape(meta['description'])
 safe_utility=html.escape(UTILITY.get(indicator, 'Permite comparar os países conforme a definição e a unidade deste indicador.'))
 safe_formula=html.escape(meta['formula'])
-st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><h3>O que é?</h3><p>{safe_desc}</p><h3>Para que serve?</h3><p>{safe_utility}</p><div class="formula"><strong>Como é calculado?</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
+st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><p><strong>O que é:</strong> {safe_desc}</p><p><strong>Utilidade:</strong> {safe_utility}</p><div class="formula"><strong>Cálculo:</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
 
 if mode=='Ranking' and not chosen:
     st.warning('Selecione ao menos um país no menu lateral.')
