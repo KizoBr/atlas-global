@@ -1,5 +1,7 @@
 import html
 import re
+import io
+from datetime import date
 import requests
 import pandas as pd
 import plotly.express as px
@@ -20,9 +22,9 @@ INDICATORS = {
     'Inflação anual': dict(code='FP.CPI.TOTL.ZG', unit='%', category='Economia e finanças públicas', description='Variação média anual dos preços ao consumidor, medida por índice nacional.', formula='Variação percentual anual do índice de preços ao consumidor (método de média anual da fonte).'),
     'Taxa de desemprego': dict(code='SL.UEM.TOTL.ZS', unit='% da força de trabalho', category='Economia e finanças públicas', description='Parcela da força de trabalho sem emprego, disponível e procurando trabalho; série modelada pela OIT.', formula='Desempregados ÷ força de trabalho × 100.'),
     'Produtividade do trabalho': dict(code=None, unit='PIB real por hora trabalhada', category='Economia e finanças públicas', description='Produção econômica ajustada por preços e poder de compra em relação ao total de horas trabalhadas.', formula='PIB real em PPC ÷ total de horas trabalhadas.'),
-    'Dívida pública (% do PIB)': dict(code=None, unit='% do PIB', category='Economia e finanças públicas', description='Dívida bruta do governo geral, relativa ao tamanho da economia.', formula='Dívida bruta do governo geral ÷ PIB × 100.'),
+    'Dívida pública (% do PIB)': dict(code='GGXWDG_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Dívida bruta do governo geral, relativa ao tamanho da economia.', formula='Dívida bruta do governo geral ÷ PIB × 100.'),
     'Carga tributária (% do PIB)': dict(code=None, unit='% do PIB', category='Economia e finanças públicas', description='Receitas tributárias e contribuições sociais obrigatórias conforme metodologia harmonizada a definir.', formula='Receitas tributárias abrangidas ÷ PIB × 100.'),
-    'Gasto total do governo (% do PIB)': dict(code=None, unit='% do PIB', category='Economia e finanças públicas', description='Despesas totais do governo geral, incluindo serviços, investimentos, transferências e demais funções.', formula='Despesa total do governo geral ÷ PIB × 100.'),
+    'Gasto total do governo (% do PIB)': dict(code='GGX_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Despesas totais do governo geral, incluindo serviços, investimentos, transferências e demais funções.', formula='Despesa total do governo geral ÷ PIB × 100.'),
     'Expectativa de vida': dict(code='SP.DYN.LE00.IN', unit='anos', category='Saúde', description='Número médio de anos que um recém-nascido viveria sob as taxas de mortalidade do período.', formula='Estimativa de tábua de vida baseada em taxas de mortalidade por idade; não é uma simples média de idades ao morrer.'),
     'Mortalidade infantil': dict(code='SP.DYN.IMRT.IN', unit='óbitos por 1.000 nascidos vivos', category='Saúde', description='Probabilidade de morrer antes de completar um ano de idade, expressa por mil nascidos vivos.', formula='Probabilidade de óbito antes de 1 ano × 1.000 (estimativa de mortalidade).'),
     'Gastos com saúde (% do PIB)': dict(code='SH.XPD.CHEX.GD.ZS', unit='% do PIB', category='Saúde', description='Despesas correntes com saúde de fontes públicas e privadas, como porcentagem do PIB.', formula='Gastos correntes com saúde ÷ PIB × 100; exclui investimento em capital.'),
@@ -32,7 +34,7 @@ INDICATORS = {
     'Gasto público por aluno — primário': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino primário, ajustada por poder de compra.', formula='Despesa pública do nível primário ÷ estudantes do nível primário, convertida para PPC constante.'),
     'Gasto público por aluno — secundário': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino secundário, ajustada por poder de compra.', formula='Despesa pública do nível secundário ÷ estudantes do nível secundário, convertida para PPC constante.'),
     'Gasto público por aluno — superior': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino superior, ajustada por poder de compra.', formula='Despesa pública do nível superior ÷ estudantes do nível superior, convertida para PPC constante.'),
-    'Índice de Desenvolvimento Humano (IDH)': dict(code=None, unit='índice de 0 a 1', category='Desenvolvimento social', description='Índice sintético de saúde, educação e renda elaborado pelo PNUD.', formula='Média geométrica dos índices normalizados de saúde, educação e renda.'),
+    'Índice de Desenvolvimento Humano (IDH)': dict(code='hdi', provider='PNUD', unit='índice de 0 a 1', category='Desenvolvimento social', description='Índice sintético de saúde, educação e renda elaborado pelo PNUD.', formula='Média geométrica dos índices normalizados de saúde, educação e renda.'),
     'Índice IRBES': dict(code=None, unit='índice metodológico do IBPT', category='Desenvolvimento social', description='Índice de Retorno de Bem-Estar à Sociedade do IBPT, que relaciona carga tributária e desenvolvimento humano.', formula='Cálculo específico publicado pelo IBPT; consultar a metodologia da edição antes de comparar.'),
     'Índice de Gini': dict(code='SI.POV.GINI', unit='pontos (0 a 100)', category='Desenvolvimento social', description='Mede a desigualdade na distribuição de renda ou consumo nas pesquisas domiciliares da fonte.', formula='Gini = área entre linha de igualdade e curva de Lorenz ÷ área total abaixo da linha de igualdade × 100.'),
     'Índice Global de Crime Organizado': dict(code=None, unit='índice de 1 a 10', category='Segurança', description='Mede a presença e extensão de mercados e atores criminosos, conforme o Índice Global de Crime Organizado.', formula='Agregação de dimensões de criminalidade segundo a metodologia e ponderações da edição oficial.'),
@@ -154,8 +156,77 @@ def load_indicator(code):
             rows.append({'ISO3':iso,'País':COUNTRIES[iso],'Ano':int(entry['date']),'Valor':float(entry['value'])})
     return pd.DataFrame(rows,columns=['ISO3','País','Ano','Valor'])
 
+# Fontes adicionais: IMF DataMapper e PNUD (HDR 2025, série 1990–2023).
+# Cada integração devolve exatamente as mesmas colunas do Banco Mundial.
+DATA_COLUMNS = ['ISO3', 'País', 'Ano', 'Valor']
+IMF_URL = 'https://www.imf.org/external/datamapper/api/v1'
+UNDP_HDI_CSV = 'https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Composite_indices_complete_time_series.csv'
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_imf(code):
+    if code not in ('GGXWDG_NGDP', 'GGX_NGDP'):
+        raise ValueError('Indicador fiscal não reconhecido.')
+    # Solicitar a série completa do indicador permite uma única requisição e
+    # mantém todas as observações para o gráfico histórico.
+    response = requests.get(f'{IMF_URL}/{code}', timeout=35,
+                            headers={'User-Agent': 'AtlasGlobal/1.0 (public statistical dashboard)'})
+    response.raise_for_status()
+    payload = response.json()
+    values = payload.get('values', {}).get(code, {})
+    if not isinstance(values, dict) or not values:
+        raise ValueError('O FMI não retornou valores para o indicador solicitado.')
+    rows = []
+    for iso, years in values.items():
+        if iso not in COUNTRIES or not isinstance(years, dict):
+            continue
+        for year, value in years.items():
+            try:
+                y = int(year)
+                v = float(value)
+                if pd.notna(v) and 1980 <= y <= date.today().year:
+                    rows.append({'ISO3': iso, 'País': COUNTRIES[iso], 'Ano': y, 'Valor': v})
+            except (ValueError, TypeError, OverflowError):
+                continue
+    if not rows:
+        raise ValueError('O FMI não forneceu observações válidas para os países selecionados.')
+    return pd.DataFrame(rows, columns=DATA_COLUMNS)
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_undp_hdi():
+    response = requests.get(UNDP_HDI_CSV, timeout=50)
+    response.raise_for_status()
+    # O arquivo HDR 2025 possui 1 coluna por ano (hdi_1990, ...).
+    # O formato pode ser alterado em edições posteriores, por isso validamos.
+    df = pd.read_csv(io.BytesIO(response.content), encoding='cp1252', low_memory=False)
+    df.columns = df.columns.str.strip()
+    if 'iso3' not in df.columns:
+        raise ValueError('Formato do CSV do PNUD alterado: coluna iso3 não encontrada.')
+    cols = [col for col in df.columns if re.fullmatch(r'hdi_\d{4}', col)]
+    if not cols:
+        raise ValueError('O arquivo do PNUD não contém colunas hdi_ANO.')
+    df['iso3'] = df['iso3'].astype(str).str.strip().str.upper()
+    df = df.loc[df['iso3'].isin(COUNTRIES), ['iso3'] + cols]
+    long = df.melt(id_vars=['iso3'], var_name='indicador_ano', value_name='Valor')
+    long['Ano'] = long['indicador_ano'].str[-4:].astype(int)
+    long['Valor'] = pd.to_numeric(long['Valor'], errors='coerce')
+    long = long.dropna(subset=['Valor'])
+    long = long[long['Valor'].between(0, 1)]
+    long['ISO3'] = long['iso3']
+    long['País'] = long['ISO3'].map(COUNTRIES)
+    if long.empty:
+        raise ValueError('Nenhum valor de IDH válido encontrado para o catálogo de países.')
+    return long[DATA_COLUMNS].reset_index(drop=True)
+
+def load_data(meta):
+    provider = meta.get('provider', 'Banco Mundial')
+    if provider == 'FMI':
+        return load_imf(meta['code'])
+    if provider == 'PNUD':
+        return load_undp_hdi()
+    return load_indicator(meta['code'])
+
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p class="byline">Criado por Rafael Pires Marciano</p><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
-st.caption('Catálogo planejado: 23 indicadores. Nesta versão, 13 possuem conexão ativa; 10 aguardam integração de suas fontes.')
+st.caption('Catálogo: 23 indicadores · 16 conectados a fontes de dados (Banco Mundial, FMI e PNUD) · 7 em integração.')
 
 # Escolha a categoria e depois apenas um indicador dentro dela.
 # A categoria aparece na área principal, preservando espaço para o ranking.
@@ -255,11 +326,13 @@ if meta['code'] is None:
     st.stop()
 
 code=meta['code']
+provider=meta.get('provider', 'Banco Mundial')
 try:
-    with st.spinner('Consultando os dados do Banco Mundial...'):
-        data=load_indicator(code)
-except (requests.RequestException,ValueError) as error:
-    st.error(f'Não foi possível obter os dados do Banco Mundial: {error}')
+    with st.spinner(f'Consultando os dados: {provider}...'):
+        data=load_data(meta)
+except (requests.RequestException, ValueError, pd.errors.ParserError, UnicodeError, KeyError) as error:
+    st.error(f'Não foi possível obter os dados de {provider}: {error}')
+    st.info('A fonte pode estar temporariamente indisponível ou ter alterado seu formato. Os demais indicadores continuam acessíveis.')
     st.stop()
 if mode=='Ranking':
     data=data[data['ISO3'].isin(chosen)]
@@ -276,8 +349,12 @@ if mode=='Ranking':
         descending=st.selectbox('Ordenação',['Maior para menor','Menor para maior'])=='Maior para menor'
     ranking=data[data['Ano']==year].sort_values(['Valor','País'],ascending=[not descending,True]).reset_index(drop=True)
     ranking.insert(0,'Posição',range(1,len(ranking)+1))
-    missing=[universe[c] for c in chosen if c not in set(ranking['ISO3'])]
-    st.caption(f'{len(ranking)} de {len(chosen)} países com dados em {year} · Fonte: Banco Mundial · Série: {code}')
+    missing=[COUNTRIES[c] for c in chosen if c not in set(ranking['ISO3'])]
+    st.caption(f'{len(ranking)} de {len(chosen)} países com dados em {year} · Fonte: {provider} · Série: {code}')
+    if provider == 'FMI' and int(year) >= date.today().year:
+        st.caption('FMI: valores do ano corrente podem ser estimativas ou projeções, conforme a edição disponível.')
+    if provider == 'PNUD':
+        st.caption('PNUD: série harmonizada do Relatório de Desenvolvimento Humano 2025, com observações de 1990 a 2023.')
     display_unit='US$ bilhões' if code=='NY.GDP.MKTP.CD' else meta['unit']
     head=f'{safe_title.upper()} — {year}'
     table_html=f'<table class="ranking-table"><thead><tr><th>Posição</th><th>País</th><th>{html.escape(display_unit)}</th></tr></thead><tbody>'
@@ -326,6 +403,7 @@ else:
             else:
                 fig=px.line(history,x='Ano',y='Valor',color='País',markers=True,title=indicator)
                 fig.update_layout(yaxis_title=meta['unit'],paper_bgcolor='#f5f7fb')
+                st.caption(f'Fonte: {provider} · Série: {code}' + (' · HDR 2025 (1990–2023)' if provider == 'PNUD' else ''))
                 if 'Brasil' in history['País'].values:
                     fig.for_each_trace(lambda trace: trace.update(line={'width':4},marker={'size':9}) if trace.name=='Brasil' else None)
                 st.plotly_chart(fig,use_container_width=True)
