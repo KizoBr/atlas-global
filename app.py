@@ -103,7 +103,13 @@ section[data-testid="stSidebar"] [data-baseweb="radio"] input:checked + div {bac
 section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] [data-baseweb="radio"] > div:first-child {background:#174e99!important;border-color:#174e99!important;}
 section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"] {background:#174e99!important;color:white!important;border-color:#174e99!important;}
 section[data-testid="stSidebar"] [data-testid="stMultiSelect"]:focus-within {border-color:#174e99;}
-/* Itens da lista única de indicadores são coloridos separadamente abaixo. */
+/* Itens selecionados e controles da barra lateral sempre azuis. */
+section[data-testid="stSidebar"] [data-baseweb="tag"] {background-color:#173d72!important;border-color:#173d72!important;}
+section[data-testid="stSidebar"] [data-baseweb="tag"] span, section[data-testid="stSidebar"] [data-baseweb="tag"] svg {color:white!important;fill:white!important;}
+section[data-testid="stSidebar"] [data-baseweb="select"] [aria-selected="true"],
+section[data-testid="stSidebar"] [data-baseweb="option"][aria-selected="true"] {background:#e8f0fd!important;color:#173d72!important;}
+section[data-testid="stSidebar"] input:focus {outline-color:#173d72!important;}
+
 </style>''',unsafe_allow_html=True)
 
 ISO2 = {'ARG':'ar','BOL':'bo','BRA':'br','CHL':'cl','COL':'co','CRI':'cr','CUB':'cu','DOM':'do','ECU':'ec','SLV':'sv','GTM':'gt','HTI':'ht','HND':'hn','MEX':'mx','NIC':'ni','PAN':'pa','PRY':'py','PER':'pe','URY':'uy','VEN':'ve','RUS':'ru','IND':'in','CHN':'cn','ZAF':'za','EGY':'eg','ETH':'et','IRN':'ir','ARE':'ae','IDN':'id','SAU':'sa'}
@@ -137,48 +143,23 @@ def load_indicator(code):
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
 st.caption('Catálogo planejado: 23 indicadores. Nesta versão, 13 possuem conexão ativa; 10 aguardam integração de suas fontes.')
 
-# Lista única, organizada por ordem temática. O indicador ativo fica em session_state.
-# Os tons facilitam a identificação das categorias sem subdividir o seletor.
-CATEGORY_COLORS = {
-    'Economia e finanças públicas': '#DCEEFF',  # Azul claro
-    'Saúde': '#FFE0E0',                       # Vermelho claro
-    'Educação': '#ECE3FF',                    # Lilás
-    'Desenvolvimento social': '#E1F3E9',     # Verde claro
-    'Segurança': '#FFF0D5',                  # Laranja claro
-}
+# Escolha a categoria e depois apenas um indicador dentro dela.
+# A categoria aparece na área principal, preservando espaço para o ranking.
+CATEGORIES = list(dict.fromkeys(m['category'] for m in INDICATORS.values()))
 if st.session_state.get('selected_indicator') not in INDICATORS:
     st.session_state['selected_indicator'] = next(iter(INDICATORS))
+if st.session_state.get('selected_category') not in CATEGORIES:
+    st.session_state['selected_category'] = INDICATORS[st.session_state['selected_indicator']]['category']
+
+def change_category():
+    category = st.session_state['selected_category']
+    if INDICATORS[st.session_state['selected_indicator']]['category'] != category:
+        st.session_state['selected_indicator'] = next(
+            name for name, item in INDICATORS.items() if item['category'] == category
+        )
 
 def choose_indicator(name):
     st.session_state['selected_indicator'] = name
-
-indicator_names = list(INDICATORS)
-style_rules = []
-for pos, name in enumerate(indicator_names):
-    background = CATEGORY_COLORS[INDICATORS[name]['category']]
-    selected = st.session_state['selected_indicator'] == name
-    key = f'indicator_{pos:02d}'
-    border = '2px solid #17477f' if selected else '1px solid #d7e0e9'
-    weight = '800' if selected else '550'
-    style_rules.append(
-        f'.st-key-{key} button {{'
-        f'background:{background}!important;color:#18304c!important;'
-        f'border:{border}!important;border-radius:7px!important;'
-        f'font-weight:{weight}!important;text-align:center!important;'
-        'width:100%!important;min-height:31px!important;'
-        'height:auto!important;padding:5px 7px!important;'
-        'box-shadow:none!important;line-height:1.15!important;}'
-    )
-    style_rules.append(
-        f'.st-key-{key} button p {{'
-        'font-size:.73rem!important;color:#18304c!important;'
-        'line-height:1.15!important;white-space:normal!important;text-align:center!important;}'
-    )
-    if selected:
-        style_rules.append(
-            f'.st-key-{key} button {{box-shadow:0 0 0 1px #17477f!important;}}'
-        )
-st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header('Configurações')
@@ -191,16 +172,40 @@ with st.sidebar:
         chosen=[]
         st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
 
-# Botões temáticos compactos: uma única seleção, sem divisão por categoria.
+# Seleção compacta por categoria na área principal (nenhuma cor temática).
 st.markdown('#### Escolha o indicador')
+st.selectbox('Categoria', CATEGORIES, key='selected_category', on_change=change_category)
+indicator_names = [name for name, info in INDICATORS.items()
+                   if info['category'] == st.session_state['selected_category']]
+style_rules = []
+for pos, name in enumerate(indicator_names):
+    selected = (st.session_state['selected_indicator'] == name)
+    key = f'indicator_{list(INDICATORS).index(name):02d}'
+    style_rules.append(
+        f'.st-key-{key} button {{'
+        'background:#fff!important;color:#18304c!important;'
+        f'border:{"2px solid #173d72" if selected else "1px solid #d4dfed"}!important;'
+        'border-radius:8px!important;min-height:32px!important;height:auto!important;'
+        'padding:5px 8px!important;width:100%!important;box-shadow:none!important;'
+        'line-height:1.18!important;}'
+    )
+    style_rules.append(
+        f'.st-key-{key} button p {{font-size:.76rem!important;'
+        f'font-weight:{"750" if selected else "500"}!important;'
+        'color:#18304c!important;line-height:1.18!important;'
+        'text-align:center!important;white-space:normal!important;}'
+    )
+    if selected:
+        style_rules.append(f'.st-key-{key} button {{background:#eaf2ff!important;}}')
+st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
 for row_start in range(0, len(indicator_names), 5):
-    cols=st.columns(5, gap='small')
-    for col, pos in zip(cols, range(row_start, min(row_start+5, len(indicator_names)))):
-        name=indicator_names[pos]
-        is_active=st.session_state['selected_indicator']==name
+    cols = st.columns(5, gap='small')
+    for col, name in zip(cols, indicator_names[row_start:row_start + 5]):
         with col:
-            st.button(('✓ ' if is_active else '')+name,
-                      key=f'indicator_{pos:02d}', use_container_width=True,
+            is_active = st.session_state['selected_indicator'] == name
+            st.button(('✓ ' if is_active else '') + name,
+                      key=f'indicator_{list(INDICATORS).index(name):02d}',
+                      use_container_width=True,
                       on_click=choose_indicator, args=(name,))
 
 indicator=st.session_state['selected_indicator']
