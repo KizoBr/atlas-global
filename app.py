@@ -13,14 +13,14 @@ LATAM = {'ARG':'Argentina','BOL':'Bolívia','BRA':'Brasil','CHL':'Chile','COL':'
 BRICS = {'BRA':'Brasil','RUS':'Rússia','IND':'Índia','CHN':'China','ZAF':'África do Sul','EGY':'Egito','ETH':'Etiópia','IRN':'Irã','ARE':'Emirados Árabes Unidos','IDN':'Indonésia','SAU':'Arábia Saudita'}
 COUNTRIES = dict(sorted((LATAM | BRICS).items(), key=lambda item: item[1]))
 
-# O catálogo contém 25 indicadores, dos quais 18 possuem integração de dados.
+# Catálogo com 25 indicadores; 22 possuem integração programada (algumas fontes podem falhar).
 INDICATORS = {
     'PIB total': dict(code='NY.GDP.MKTP.CD', unit='US$ correntes', category='Economia e finanças públicas', description='Valor monetário dos bens e serviços finais produzidos dentro do país em um ano, a preços correntes.', formula='PIB = consumo + investimento + gasto do governo + exportações − importações.'),
     'PIB per capita (PPC)': dict(code='NY.GDP.PCAP.PP.KD', unit='dólares internacionais constantes', category='Economia e finanças públicas', description='Produção econômica real por habitante, corrigida pelas diferenças de poder de compra entre países.', formula='PIB real ajustado por PPC ÷ população.'),
     'Crescimento real do PIB': dict(code='NY.GDP.MKTP.KD.ZG', unit='%', category='Economia e finanças públicas', description='Variação percentual anual da produção econômica descontando alterações de preços.', formula='[(PIB real no ano t ÷ PIB real no ano t−1) − 1] × 100.'),
     'Inflação anual': dict(code='FP.CPI.TOTL.ZG', unit='%', category='Economia e finanças públicas', description='Variação média anual dos preços ao consumidor, medida por índice nacional.', formula='Variação percentual anual do índice de preços ao consumidor (método de média anual da fonte).'),
     'Taxa de desemprego': dict(code='SL.UEM.TOTL.ZS', unit='% da força de trabalho', category='Economia e finanças públicas', description='Parcela da força de trabalho sem emprego, disponível e procurando trabalho; série modelada pela OIT.', formula='Desempregados ÷ força de trabalho × 100.'),
-    'Produtividade do trabalho': dict(code=None, unit='PIB real por hora trabalhada', category='Economia e finanças públicas', description='Produção econômica ajustada por preços e poder de compra em relação ao total de horas trabalhadas.', formula='PIB real em PPC ÷ total de horas trabalhadas.'),
+    'Produtividade do trabalho': dict(code='labor-productivity-per-hour-pennworldtable', provider='OWID/Penn World Table', unit='dólares internacionais de 2021 por hora', category='Economia e finanças públicas', description='Produção econômica ajustada por preços e poder de compra em relação ao total de horas trabalhadas.', formula='PIB real em PPC ÷ total de horas trabalhadas.'),
     'Dívida pública (% do PIB)': dict(code='GGXWDG_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Dívida bruta do governo geral, relativa ao tamanho da economia.', formula='Dívida bruta do governo geral ÷ PIB × 100.'),
     'Carga tributária (% do PIB)': dict(code=None, unit='% do PIB', category='Economia e finanças públicas', description='Receitas tributárias e contribuições sociais obrigatórias conforme metodologia harmonizada a definir.', formula='Receitas tributárias abrangidas ÷ PIB × 100.'),
     'Gasto total do governo (% do PIB)': dict(code='GGX_NGDP', provider='FMI', unit='% do PIB', category='Economia e finanças públicas', description='Despesas totais do governo geral, incluindo serviços, investimentos, transferências e demais funções.', formula='Despesa total do governo geral ÷ PIB × 100.'),
@@ -30,9 +30,9 @@ INDICATORS = {
     'Gastos com saúde por habitante': dict(code='SH.XPD.CHEX.PC.CD', unit='US$ correntes por pessoa', category='Saúde', description='Gasto corrente com saúde por habitante, em dólares correntes.', formula='Despesas correntes com saúde ÷ população, convertidas para US$ correntes.'),
     'Taxa de alfabetização de adultos': dict(code='SE.ADT.LITR.ZS', unit='% (15 anos ou mais)', category='Educação', description='Proporção da população com 15 anos ou mais capaz de ler e escrever uma declaração curta e simples.', formula='Adultos alfabetizados ÷ população com 15 anos ou mais × 100.'),
     'Gastos públicos com educação (% do PIB)': dict(code='SE.XPD.TOTL.GD.ZS', unit='% do PIB', category='Educação', description='Despesas governamentais em educação, em proporção ao PIB.', formula='Despesa pública com educação ÷ PIB × 100.'),
-    'Gasto público por aluno — primário': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino primário, ajustada por poder de compra.', formula='Despesa pública do nível primário ÷ estudantes do nível primário, convertida para PPC constante.'),
-    'Gasto público por aluno — secundário': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino secundário, ajustada por poder de compra.', formula='Despesa pública do nível secundário ÷ estudantes do nível secundário, convertida para PPC constante.'),
-    'Gasto público por aluno — superior': dict(code=None, unit='US$ PPC constantes por aluno', category='Educação', description='Despesa pública por estudante do ensino superior, ajustada por poder de compra.', formula='Despesa pública do nível superior ÷ estudantes do nível superior, convertida para PPC constante.'),
+    'Gasto público por aluno — primário': dict(code='SE.XPD.PRIM.PC.ZS', provider='UNESCO/Banco Mundial (estimativa PPC)', unit='dólares internacionais constantes de 2021 por aluno', category='Educação', description='Estimativa da despesa pública por estudante do ensino primário, expressa em dólares internacionais constantes de 2021 por conversão do indicador UNESCO de gasto por estudante em % do PIB per capita.', formula='(Gasto por aluno como % do PIB per capita ÷ 100) × PIB per capita PPC real constante de 2021, no mesmo ano.'),
+    'Gasto público por aluno — secundário': dict(code='SE.XPD.SECO.PC.ZS', provider='UNESCO/Banco Mundial (estimativa PPC)', unit='dólares internacionais constantes de 2021 por aluno', category='Educação', description='Estimativa da despesa pública por estudante do ensino secundário, expressa em dólares internacionais constantes de 2021 por conversão do indicador UNESCO de gasto por estudante em % do PIB per capita.', formula='(Gasto por aluno como % do PIB per capita ÷ 100) × PIB per capita PPC real constante de 2021, no mesmo ano.'),
+    'Gasto público por aluno — superior': dict(code='SE.XPD.TERT.PC.ZS', provider='UNESCO/Banco Mundial (estimativa PPC)', unit='dólares internacionais constantes de 2021 por aluno', category='Educação', description='Estimativa da despesa pública por estudante do ensino superior, expressa em dólares internacionais constantes de 2021 por conversão do indicador UNESCO de gasto por estudante em % do PIB per capita.', formula='(Gasto por aluno como % do PIB per capita ÷ 100) × PIB per capita PPC real constante de 2021, no mesmo ano.'),
     'Índice de Desenvolvimento Humano (IDH)': dict(code='hdi', provider='PNUD', unit='índice de 0 a 1', category='Desenvolvimento social', description='Índice sintético de saúde, educação e renda elaborado pelo PNUD.', formula='Média geométrica dos índices normalizados de saúde, educação e renda.'),
     'Índice IRBES': dict(code=None, unit='índice metodológico do IBPT', category='Desenvolvimento social', description='Índice de Retorno de Bem-Estar à Sociedade do IBPT, que relaciona carga tributária e desenvolvimento humano.', formula='Cálculo específico publicado pelo IBPT; consultar a metodologia da edição antes de comparar.'),
     'Índice de Gini': dict(code='SI.POV.GINI', unit='pontos (0 a 100)', category='Desenvolvimento social', description='Mede a desigualdade na distribuição de renda ou consumo nas pesquisas domiciliares da fonte.', formula='Gini = área entre linha de igualdade e curva de Lorenz ÷ área total abaixo da linha de igualdade × 100.'),
@@ -239,16 +239,70 @@ def load_undp_hdi():
         raise ValueError('Nenhum valor de IDH válido encontrado para o catálogo de países.')
     return long[DATA_COLUMNS].reset_index(drop=True)
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_productivity():
+    """Série de produtividade real/hora da Penn World Table via OWID Grapher."""
+    url = 'https://ourworldindata.org/grapher/labor-productivity-per-hour-pennworldtable.csv'
+    response = requests.get(url, timeout=55, headers={'User-Agent': 'AtlasGlobal/1.0 (public research dashboard)'})
+    response.raise_for_status()
+    df = pd.read_csv(io.BytesIO(response.content), low_memory=False)
+    required = {'Entity', 'Code', 'Year'}
+    if not required.issubset(df.columns):
+        raise ValueError('Formato da base de produtividade alterado: colunas de país/ano ausentes.')
+    metric_cols = [c for c in df.columns if c not in ('Entity','Code','Year')]
+    if len(metric_cols) != 1:
+        raise ValueError('Esperada uma coluna numérica de produtividade; verifique o formato da fonte.')
+    df['ISO3'] = df['Code'].astype(str).str.upper()
+    df = df[df['ISO3'].isin(COUNTRIES)].copy()
+    df['Ano'] = pd.to_numeric(df['Year'], errors='coerce')
+    df['Valor'] = pd.to_numeric(df[metric_cols[0]], errors='coerce')
+    df = df.dropna(subset=['Ano', 'Valor'])
+    df = df[df['Valor'] >= 0]
+    df['Ano'] = df['Ano'].astype(int)
+    df['País'] = df['ISO3'].map(COUNTRIES)
+    result = df[DATA_COLUMNS].drop_duplicates(['ISO3','Ano']).sort_values(['ISO3','Ano'])
+    if result.empty:
+        raise ValueError('Nenhuma observação de produtividade disponível para os países selecionados.')
+    return result.reset_index(drop=True)
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_student_spending(ratio_code):
+    """Gasto por aluno PPC 2021 derivado de UNESCO %PIB per capita × PIB per capita PPC real.
+
+    Conversão contábil, NÃO série direta UIS de gastos por aluno em PPP.
+    Dados de gasto por aluno do UIS disponibilizados pelo Banco Mundial podem terminar em 2018.
+    """
+    allowed = {'SE.XPD.PRIM.PC.ZS', 'SE.XPD.SECO.PC.ZS', 'SE.XPD.TERT.PC.ZS'}
+    if ratio_code not in allowed:
+        raise ValueError('Nível educacional não reconhecido.')
+    ratio = load_indicator(ratio_code)
+    ppp = load_indicator('NY.GDP.PCAP.PP.KD')
+    if ratio.empty or ppp.empty:
+        return pd.DataFrame(columns=DATA_COLUMNS)
+    joined = ratio[['ISO3','Ano','Valor']].merge(
+        ppp[['ISO3','Ano','Valor']], on=['ISO3','Ano'], how='inner', suffixes=('_ratio','_ppp'))
+    joined['Valor'] = joined['Valor_ratio'] * joined['Valor_ppp'] / 100.0
+    joined = joined[joined['Valor'].notna() & (joined['Valor'] >= 0)]
+    joined['País'] = joined['ISO3'].map(COUNTRIES)
+    result = joined[DATA_COLUMNS].sort_values(['ISO3','Ano'])
+    if result.empty:
+        raise ValueError('Não há anos coincidentes entre gasto por aluno e PIB PPC para esses países.')
+    return result.reset_index(drop=True)
+
 def load_data(meta):
     provider = meta.get('provider', 'Banco Mundial')
     if provider == 'FMI':
         return load_imf(meta['code'])
     if provider == 'PNUD':
         return load_undp_hdi()
+    if provider == 'OWID/Penn World Table':
+        return load_productivity()
+    if provider == 'UNESCO/Banco Mundial (estimativa PPC)':
+        return load_student_spending(meta['code'])
     return load_indicator(meta['code'])
 
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p class="byline">Criado por Rafael Pires Marciano</p><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
-st.caption('Catálogo: 25 indicadores · 18 com integração programada (Banco Mundial, FMI e PNUD) · 7 em integração.')
+st.caption('Catálogo: 25 indicadores · 22 com integração programada · 3 ainda pendentes. A disponibilidade depende de cada fonte.')
 
 # Escolha a categoria e depois apenas um indicador dentro dela.
 # A categoria aparece na área principal, preservando espaço para o ranking.
@@ -343,7 +397,7 @@ if mode=='Ranking' and not chosen:
     st.warning('No grupo Personalizado, selecione ao menos um país no menu lateral.')
     st.stop()
 if meta['code'] is None:
-    st.info('📚 Indicador previsto no catálogo de 25, mas ainda sem integração à fonte oficial. Não exibimos dados ou rankings simulados.')
+    st.info('📚 Indicador do catálogo ainda sem integração confirmada à fonte oficial. Não exibimos dados ou rankings simulados.')
     st.caption('Próxima etapa: integrar a fonte específica, validar unidades, anos e cobertura por país.')
     st.stop()
 
@@ -377,6 +431,10 @@ if mode=='Ranking':
         st.caption('FMI: valores do ano corrente podem ser estimativas ou projeções, conforme a edição disponível.')
     if provider == 'PNUD':
         st.caption('PNUD: série harmonizada do Relatório de Desenvolvimento Humano 2025, com observações de 1990 a 2023.')
+    if provider == 'UNESCO/Banco Mundial (estimativa PPC)':
+        st.caption('Estimativa calculada: (gasto público por aluno em % do PIB per capita ÷ 100) × PIB per capita PPC constante de 2021, no mesmo ano. Cobertura histórica pode terminar em 2018. Não é uma série direta da UNESCO em PPP.')
+    if provider == 'OWID/Penn World Table':
+        st.caption('Produtividade real por hora trabalhada; Penn World Table via Our World in Data, dólares internacionais de 2021.')
     display_unit='US$ bilhões' if code=='NY.GDP.MKTP.CD' else meta['unit']
     head=f'{safe_title.upper()} — {year}'
     table_html=f'<table class="ranking-table"><thead><tr><th>Posição</th><th>País</th><th>{html.escape(display_unit)}</th></tr></thead><tbody>'
@@ -426,6 +484,8 @@ else:
                 fig=px.line(history,x='Ano',y='Valor',color='País',markers=True,title=indicator)
                 fig.update_layout(yaxis_title=meta['unit'],paper_bgcolor='#f5f7fb')
                 st.caption(f'Fonte: {provider} · Série: {code}' + (' · HDR 2025 (1990–2023)' if provider == 'PNUD' else ''))
+                if provider == 'UNESCO/Banco Mundial (estimativa PPC)':
+                    st.caption('Valor derivado das séries anuais de gasto por aluno/PIB per capita e PIB PPC constante (mesmo ano).')
                 if 'Brasil' in history['País'].values:
                     fig.for_each_trace(lambda trace: trace.update(line={'width':4},marker={'size':9}) if trace.name=='Brasil' else None)
                 st.plotly_chart(fig,use_container_width=True)
