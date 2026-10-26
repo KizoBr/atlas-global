@@ -109,12 +109,6 @@ section[data-testid="stSidebar"] [data-baseweb="tag"] span, section[data-testid=
 section[data-testid="stSidebar"] [data-baseweb="select"] [aria-selected="true"],
 section[data-testid="stSidebar"] [data-baseweb="option"][aria-selected="true"] {background:#e8f0fd!important;color:#173d72!important;}
 section[data-testid="stSidebar"] input:focus {outline-color:#173d72!important;}
-/* Chips de país, no painel principal, também usam azul-escuro. */
-[data-testid="stMain"] [data-baseweb="tag"] {background:#173d72!important;border-color:#173d72!important;}
-[data-testid="stMain"] [data-baseweb="tag"] span,
-[data-testid="stMain"] [data-baseweb="tag"] svg {color:#fff!important;fill:#fff!important;}
-[data-testid="stMain"] [data-testid="stSegmentedControl"] button[aria-checked="true"] {background:#173d72!important;color:white!important;}
-
 
 </style>''',unsafe_allow_html=True)
 
@@ -167,64 +161,52 @@ def change_category():
 def choose_indicator(name):
     st.session_state['selected_indicator'] = name
 
-# Botões de indicadores na barra lateral; configurações de visualização na área principal.
 with st.sidebar:
-    st.markdown('### Indicadores')
-    st.caption('Selecione uma categoria e escolha um indicador.')
-    st.selectbox('Categoria', CATEGORIES, key='selected_category', on_change=change_category)
-    indicator_names = [name for name, info in INDICATORS.items()
-                       if info['category'] == st.session_state['selected_category']]
-    # Estilo escuro uniforme, texto branco e realce mais forte no indicador ativo.
-    button_css=[]
-    for name in indicator_names:
-        selected = st.session_state['selected_indicator'] == name
-        key = f'indicator_{list(INDICATORS).index(name):02d}'
-        button_css.append(
-            f'section[data-testid="stSidebar"] .st-key-{key} button {{'
-            'background:linear-gradient(125deg,#102c50,#174579)!important;'
-            'color:#ffffff!important;'
-            f'border:{"2px solid #56b5ff" if selected else "1px solid #254f7e"}!important;'
-            'border-radius:11px!important;min-height:36px!important;height:auto!important;'
-            'padding:7px 11px!important;width:100%!important;'
-            f'box-shadow:{"0 0 0 2px #bcdfff,0 4px 11px #12345c28" if selected else "0 2px 5px #12345c16"}!important;'
-            'transition:filter .16s, transform .16s!important;'
-            '}'
-        )
-        button_css.append(
-            f'section[data-testid="stSidebar"] .st-key-{key} button p {{'
-            'color:#fff!important;font-size:.79rem!important;'
-            f'font-weight:{"800" if selected else "600"}!important;'
-            'line-height:1.25!important;text-align:left!important;'
-            'white-space:normal!important;overflow-wrap:anywhere!important;}'
-        )
-        button_css.append(
-            f'section[data-testid="stSidebar"] .st-key-{key} button:hover {{'
-            'background:linear-gradient(125deg,#174579,#2364a5)!important;'
-            'border-color:#77c5ff!important;filter:brightness(1.06);}'
-        )
-    st.markdown('<style>' + '\n'.join(button_css) + '</style>', unsafe_allow_html=True)
-    for name in indicator_names:
-        selected = st.session_state['selected_indicator'] == name
-        st.button(('✓  ' if selected else '') + name,
-                  key=f'indicator_{list(INDICATORS).index(name):02d}',
-                  use_container_width=True,
-                  on_click=choose_indicator, args=(name,))
+    st.header('Configurações')
+    group=st.radio('Grupo de países',['Todos','América Latina','BRICS'])
+    universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
+    mode=st.radio('Visualização',['Ranking','Evolução histórica'])
+    if mode=='Ranking':
+        chosen=st.multiselect('Países do ranking',list(universe),default=list(universe),format_func=lambda iso:universe[iso])
+    else:
+        chosen=[]
+        st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
 
-st.markdown('#### Configurações')
-col_group, col_mode = st.columns(2, gap='medium')
-with col_group:
-    group=st.selectbox('Grupo de países',['Todos','América Latina','BRICS'],key='country_group')
-with col_mode:
-    mode=st.radio('Visualização',['Ranking','Evolução histórica'],horizontal=True,key='view_mode')
-universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
-if mode=='Ranking':
-    if 'ranking_countries' in st.session_state:
-        st.session_state['ranking_countries'] = [iso for iso in st.session_state['ranking_countries'] if iso in universe]
-    chosen=st.multiselect('Países do ranking',list(universe),default=list(universe),
-                         format_func=lambda iso:universe[iso],key='ranking_countries')
-else:
-    chosen=[]
-    st.caption('Para a evolução histórica, selecione até cinco países acima do gráfico.')
+# Seleção compacta por categoria na área principal (nenhuma cor temática).
+st.markdown('#### Escolha o indicador')
+st.selectbox('Categoria', CATEGORIES, key='selected_category', on_change=change_category)
+indicator_names = [name for name, info in INDICATORS.items()
+                   if info['category'] == st.session_state['selected_category']]
+style_rules = []
+for pos, name in enumerate(indicator_names):
+    selected = (st.session_state['selected_indicator'] == name)
+    key = f'indicator_{list(INDICATORS).index(name):02d}'
+    style_rules.append(
+        f'.st-key-{key} button {{'
+        'background:#fff!important;color:#18304c!important;'
+        f'border:{"2px solid #173d72" if selected else "1px solid #d4dfed"}!important;'
+        'border-radius:8px!important;min-height:32px!important;height:auto!important;'
+        'padding:5px 8px!important;width:100%!important;box-shadow:none!important;'
+        'line-height:1.18!important;}'
+    )
+    style_rules.append(
+        f'.st-key-{key} button p {{font-size:.76rem!important;'
+        f'font-weight:{"750" if selected else "500"}!important;'
+        'color:#18304c!important;line-height:1.18!important;'
+        'text-align:center!important;white-space:normal!important;}'
+    )
+    if selected:
+        style_rules.append(f'.st-key-{key} button {{background:#eaf2ff!important;}}')
+st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
+for row_start in range(0, len(indicator_names), 5):
+    cols = st.columns(5, gap='small')
+    for col, name in zip(cols, indicator_names[row_start:row_start + 5]):
+        with col:
+            is_active = st.session_state['selected_indicator'] == name
+            st.button(('✓ ' if is_active else '') + name,
+                      key=f'indicator_{list(INDICATORS).index(name):02d}',
+                      use_container_width=True,
+                      on_click=choose_indicator, args=(name,))
 
 indicator=st.session_state['selected_indicator']
 meta=INDICATORS[indicator]
