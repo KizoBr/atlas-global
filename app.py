@@ -163,14 +163,28 @@ def choose_indicator(name):
 
 with st.sidebar:
     st.header('Configurações')
-    group=st.radio('Grupo de países',['Todos','América Latina','BRICS'])
-    universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
-    mode=st.radio('Visualização',['Ranking','Evolução histórica'])
-    if mode=='Ranking':
-        chosen=st.multiselect('Países do ranking',list(universe),default=list(universe),format_func=lambda iso:universe[iso])
+    group=st.radio('Grupo de países', ['Todos', 'América Latina', 'BRICS', 'Personalizado'])
+    # Para os grupos prontos, todos os países integrantes entram automaticamente no ranking.
+    # A pesquisa e escolha individual aparecem somente no modo Personalizado.
+    universe=(LATAM if group=='América Latina' else
+              BRICS if group=='BRICS' else COUNTRIES)
+    mode=st.radio('Visualização', ['Ranking', 'Evolução histórica'])
+    if group=='Personalizado':
+        st.caption('Pesquise pelo nome e escolha os países que deseja comparar.')
+        chosen_custom=st.multiselect(
+            'Buscar e selecionar países',
+            options=list(COUNTRIES),
+            default=[],
+            format_func=lambda iso: COUNTRIES[iso],
+            placeholder='Digite o nome de um país...',
+            key='custom_country_selection',
+        )
+        st.caption(f'{len(chosen_custom)} país(es) selecionado(s).')
     else:
-        chosen=[]
-        st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
+        chosen_custom=[]
+    chosen=(chosen_custom if group=='Personalizado' else list(universe)) if mode=='Ranking' else []
+    if mode=='Evolução histórica':
+        st.caption('Escolha até cinco países acima do gráfico.')
 
 # Seleção compacta por categoria na área principal (nenhuma cor temática).
 st.markdown('#### Escolha o indicador')
@@ -218,7 +232,7 @@ safe_formula=html.escape(meta['formula'])
 st.markdown(f'<div class="indicator-head"><div class="eyebrow">Indicador selecionado</div><h2>{safe_title}</h2><p><strong>O que é:</strong> {safe_desc}</p><p><strong>Utilidade:</strong> {safe_utility}</p><div class="formula"><strong>Cálculo:</strong> {safe_formula}</div></div>',unsafe_allow_html=True)
 
 if mode=='Ranking' and not chosen:
-    st.warning('Selecione ao menos um país no menu lateral.')
+    st.warning('No grupo Personalizado, selecione ao menos um país no menu lateral.')
     st.stop()
 if meta['code'] is None:
     st.info('📚 Indicador previsto no catálogo de 23, mas ainda sem integração à fonte oficial. Não exibimos dados ou rankings simulados.')
@@ -266,15 +280,18 @@ if mode=='Ranking':
 else:
     st.subheader('Evolução histórica')
     st.caption('Escolha de 1 a 5 países para montar o gráfico. O gráfico começa vazio.')
-    options=list(universe)
+    options=(chosen_custom if group=='Personalizado' else list(universe))
+    if group=='Personalizado' and not options:
+        st.info('Selecione primeiro os países no menu lateral para disponibilizá-los no gráfico.')
     selected_history=st.multiselect(
         'Países para comparar (máximo de 5)',
         options,
         default=[],
-        format_func=lambda iso:universe[iso],
+        format_func=lambda iso:COUNTRIES[iso],
         max_selections=5,
         key='historical_countries',
     )
+    selected_history=[iso for iso in selected_history if iso in options]
     if not selected_history:
         st.info('Selecione os países acima para visualizar a evolução histórica deste indicador.')
     else:
