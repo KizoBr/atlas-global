@@ -92,17 +92,18 @@ st.markdown('''<style>
 .flag-img {width:29px;height:20px;object-fit:cover;vertical-align:middle;margin-right:12px;border:1px solid #d9e0e9;border-radius:2px;}
 .smallnote{font-size:.88rem;color:#66728b;margin:9px 0 4px;}
 div[data-testid="stSelectbox"] label p {font-size:1.08rem;font-weight:800;color:#182b4b;}
-/* Estilo azul-marinho na barra lateral; textos brancos e ações azuis. */
-section[data-testid="stSidebar"] {background:#102c53;}
-section[data-testid="stSidebar"] h1,section[data-testid="stSidebar"] h2,section[data-testid="stSidebar"] h3,
-section[data-testid="stSidebar"] p,section[data-testid="stSidebar"] label,section[data-testid="stSidebar"] span,
-section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {color:#fff!important;}
-section[data-testid="stSidebar"] [data-baseweb="tag"]{background:#245eab!important;}
+/* Barra lateral branca; seleções em azul escuro, texto claro nos chips. */
+section[data-testid="stSidebar"] {background:#fff;}
+section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {color:#183153;}
+section[data-testid="stSidebar"] [data-baseweb="tag"] {background:#173d72!important;}
 section[data-testid="stSidebar"] [data-baseweb="tag"] span {color:#fff!important;}
-section[data-testid="stSidebar"] [data-baseweb="radio"] > div:first-child {border-color:#73aaff;}
-section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] [data-baseweb="radio"] > div:first-child {background:#2364b3!important;}
-section[data-testid="stSidebar"] button[kind="primary"],section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {background:#2364b3!important;color:white!important;border:0;}
-section[data-testid="stSidebar"] input {color:#1a2d49!important;}
+section[data-testid="stSidebar"] [data-baseweb="tag"] svg {fill:#fff!important;color:#fff!important;}
+section[data-testid="stSidebar"] [data-baseweb="radio"] input:checked + div {background:#174e99!important;border-color:#174e99!important;}
+section[data-testid="stSidebar"] [role="radiogroup"] label[data-checked="true"] [data-baseweb="radio"] > div:first-child {background:#174e99!important;border-color:#174e99!important;}
+section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"] {background:#174e99!important;color:white!important;border-color:#174e99!important;}
+section[data-testid="stSidebar"] [data-testid="stMultiSelect"]:focus-within {border-color:#174e99;}
+/* Itens da lista única de indicadores são coloridos separadamente abaixo. */
 </style>''',unsafe_allow_html=True)
 
 ISO2 = {'ARG':'ar','BOL':'bo','BRA':'br','CHL':'cl','COL':'co','CRI':'cr','CUB':'cu','DOM':'do','ECU':'ec','SLV':'sv','GTM':'gt','HTI':'ht','HND':'hn','MEX':'mx','NIC':'ni','PAN':'pa','PRY':'py','PER':'pe','URY':'uy','VEN':'ve','RUS':'ru','IND':'in','CHN':'cn','ZAF':'za','EGY':'eg','ETH':'et','IRN':'ir','ARE':'ae','IDN':'id','SAU':'sa'}
@@ -136,23 +137,79 @@ def load_indicator(code):
 st.markdown('<div class="hero"><h1>🌎 Atlas Global</h1><p>Indicadores internacionais · América Latina e BRICS · Rankings e séries históricas</p></div>',unsafe_allow_html=True)
 st.caption('Catálogo planejado: 23 indicadores. Nesta versão, 13 possuem conexão ativa; 10 aguardam integração de suas fontes.')
 
-categories=list(dict.fromkeys(item['category'] for item in INDICATORS.values()))
-category=st.selectbox('1. ESCOLHA A CATEGORIA',categories)
-choices=[name for name,meta in INDICATORS.items() if meta['category']==category]
-indicator=st.selectbox('2. ESCOLHA O INDICADOR',choices)
-meta=INDICATORS[indicator]
+# Lista única, organizada por ordem temática. O indicador ativo fica em session_state.
+# Os tons facilitam a identificação das categorias sem subdividir o seletor.
+CATEGORY_COLORS = {
+    'Economia e finanças públicas': '#DCEEFF',  # Azul claro
+    'Saúde': '#FFE0E0',                       # Vermelho claro
+    'Educação': '#ECE3FF',                    # Lilás
+    'Desenvolvimento social': '#E1F3E9',     # Verde claro
+    'Segurança': '#FFF0D5',                  # Laranja claro
+}
+if st.session_state.get('selected_indicator') not in INDICATORS:
+    st.session_state['selected_indicator'] = next(iter(INDICATORS))
+
+def choose_indicator(name):
+    st.session_state['selected_indicator'] = name
+
+indicator_names = list(INDICATORS)
+style_rules = []
+for pos, name in enumerate(indicator_names):
+    background = CATEGORY_COLORS[INDICATORS[name]['category']]
+    selected = st.session_state['selected_indicator'] == name
+    key = f'indicator_{pos:02d}'
+    border = '3px solid #173d72' if selected else '1px solid #dbe4ef'
+    weight = '800' if selected else '550'
+    style_rules.append(
+        f'section[data-testid="stSidebar"] .st-key-{key} button {{'
+        f'background:{background}!important;color:#122b48!important;'
+        f'border:{border}!important;border-radius:9px!important;'
+        f'font-weight:{weight}!important;text-align:left!important;'
+        'width:100%!important;min-height:40px!important;white-space:normal!important;'
+        'height:auto!important;padding:8px 10px!important;'
+        'box-shadow:none!important;}'
+    )
+    style_rules.append(
+        f'section[data-testid="stSidebar"] .st-key-{key} button p {{'
+        'color:#122b48!important;white-space:normal!important;text-align:left!important;}'
+    )
+    if selected:
+        style_rules.append(
+            f'section[data-testid="stSidebar"] .st-key-{key} button {{'
+            'box-shadow:0 0 0 2px #c4dafa!important;}'
+        )
+st.markdown('<style>' + '\n'.join(style_rules) + '</style>', unsafe_allow_html=True)
 
 with st.sidebar:
+    st.header('Indicadores')
+    st.caption('Escolha um indicador. As cores representam as categorias; somente um pode ficar ativo.')
+    st.markdown("""<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;font-size:11px;">
+    <span style="background:#DCEEFF;padding:3px 7px;border-radius:5px;">Economia</span>
+    <span style="background:#FFE0E0;padding:3px 7px;border-radius:5px;">Saúde</span>
+    <span style="background:#ECE3FF;padding:3px 7px;border-radius:5px;">Educação</span>
+    <span style="background:#E1F3E9;padding:3px 7px;border-radius:5px;">Social</span>
+    <span style="background:#FFF0D5;padding:3px 7px;border-radius:5px;">Segurança</span>
+    </div>""", unsafe_allow_html=True)
+    # Rolagem interna preserva espaço para os filtros de países.
+    with st.container(height=390, border=True):
+        for pos, name in enumerate(indicator_names):
+            is_active = st.session_state['selected_indicator'] == name
+            title = ('✓  ' if is_active else '') + name
+            st.button(title, key=f'indicator_{pos:02d}', use_container_width=True,
+                      on_click=choose_indicator, args=(name,))
+    st.divider()
     st.header('Configurações')
     group=st.radio('Grupo de países',['Todos','América Latina','BRICS'])
     universe=COUNTRIES if group=='Todos' else LATAM if group=='América Latina' else BRICS
     mode=st.radio('Visualização',['Ranking','Evolução histórica'])
-    # A escolha lateral vale somente para os rankings.
     if mode=='Ranking':
         chosen=st.multiselect('Países do ranking',list(universe),default=list(universe),format_func=lambda iso:universe[iso])
     else:
         chosen=[]
         st.caption('Na evolução histórica, escolha até cinco países acima do gráfico.')
+
+indicator=st.session_state['selected_indicator']
+meta=INDICATORS[indicator]
 
 safe_title=html.escape(indicator)
 safe_desc=html.escape(meta['description'])
