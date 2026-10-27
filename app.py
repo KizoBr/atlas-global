@@ -318,81 +318,170 @@ def load_pisa_series(code):
 OCINDEX_2025_URL = 'https://ocindex.net/assets/downloads/global_oc_index.xlsx'
 @st.cache_data(ttl=CACHE_MENSAL_SEGUNDOS, show_spinner=False)
 def load_ocindex_2025():
+    """Lê a pontuação total de criminalidade 2025 do arquivo oficial da GI-TOC.
+
+    Suporta abas e títulos multinível. Nunca usa 'resiliência' como substituto.
+    """
     import zipfile
-    import xml.etree.ElementTree as ET
     import unicodedata
-    from collections import defaultdict
-    response = requests.get(OCINDEX_2025_URL, timeout=60, headers={'User-Agent':'Mozilla/5.0'})
+    import xml.etree.ElementTree as ET
+
+    response = requests.get(
+        OCINDEX_2025_URL,
+        timeout=65,
+        headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/octet-stream,*/*'},
+    )
     response.raise_for_status()
-    if not response.content.startswith(b'PK'):
-        raise ValueError('A fonte de crime organizado não retornou um arquivo Excel válido.')
-    ns = {'x': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
-          'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
-    def norm(v):
-        txt = unicodedata.normalize('NFKD', str(v or ''))
-        return ' '.join(''.join(c for c in txt if not unicodedata.combining(c)).lower().replace('_',' ').split())
-    name_iso = {norm(n): iso for iso,n in COUNTRIES.items()}
-    name_iso.update({'brazil':'BRA','russia':'RUS','russian federation':'RUS',
-      'iran':'IRN','iran islamic republic':'IRN','venezuela':'VEN','venezuela rb':'VEN',
-      'bolivia':'BOL','bolivia plurinational state of':'BOL','turkiye':'TUR',
-      'egypt':'EGY','united arab emirates':'ARE','south africa':'ZAF',
-      'dominican republic':'DOM','saudi arabia':'SAU','costa rica':'CRI',
-      'el salvador':'SLV','ethiopia':'ETH','indonesia':'IDN','china':'CHN',
-      'india':'IND','mexico':'MEX','argentina':'ARG','colombia':'COL',
-      'peru':'PER','paraguay':'PRY','uruguay':'URY','chile':'CHL',
-      'guatemala':'GTM','honduras':'HND','haiti':'HTI','nicaragua':'NIC',
-      'panama':'PAN','ecuador':'ECU','cuba':'CUB'})
-    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        ss=[]
-        if 'xl/sharedStrings.xml' in z.namelist():
-            root=ET.fromstring(z.read('xl/sharedStrings.xml'))
-            ss=[''.join(t.text or '' for t in si.findall('.//x:t',ns)) for si in root.findall('x:si',ns)]
-        sheets=sorted((x for x in z.namelist() if re.fullmatch(r'xl/worksheets/sheet\d+\.xml',x)),
-                      key=lambda x:int(re.search(r'sheet(\d+)',x).group(1)))
-        if not sheets:
-            raise ValueError('Planilha do índice sem abas tabulares reconhecidas.')
-        for sh in sheets:
-            root=ET.fromstring(z.read(sh))
-            rows=[]
-            for row in root.findall('.//x:sheetData/x:row',ns):
-                cells={}
-                for c in row.findall('x:c',ns):
-                    ref=c.get('r','A1')
-                    letters=re.match(r'[A-Z]+',ref)
-                    if not letters: continue
-                    ix=0
-                    for ch in letters.group(): ix=ix*26+ord(ch)-64
-                    v=c.find('x:v',ns)
-                    inline=c.find('x:is',ns)
-                    if c.get('t')=='s' and v is not None:
-                        try: value=ss[int(v.text)]
-                        except (ValueError,IndexError,TypeError): value=''
-                    elif inline is not None:
-                        value=''.join(t.text or '' for t in inline.findall('.//x:t',ns))
-                    else: value=v.text if v is not None else ''
-                    cells[ix-1]=value
-                if cells: rows.append(cells)
-            # Detect explicit country column and overall criminality score;
-            # never use subindex of resilience or market crime as the main score.
-            for hidx, hdr in enumerate(rows[:16]):
-                cols={i:norm(v) for i,v in hdr.items()}
-                country_col=next((i for i,v in cols.items() if v in ('country','country name','countries','economy','economy name','state')),None)
-                iso_col=next((i for i,v in cols.items() if v in ('iso3','iso 3','iso code','iso3 code','country code')),None)
-                score_col=next((i for i,v in cols.items() if v in ('criminality','criminality score','overall criminality','overall criminality score','criminality index','criminality index score')),None)
-                if score_col is None or (country_col is None and iso_col is None): continue
-                result=[]
-                for record in rows[hidx+1:]:
-                    iso=str(record.get(iso_col,'')).strip().upper() if iso_col is not None else ''
-                    if iso not in COUNTRIES:
-                        iso=name_iso.get(norm(record.get(country_col,''))) if country_col is not None else None
-                    if iso not in COUNTRIES: continue
-                    try: value=float(str(record.get(score_col,'')).replace(',','.'))
-                    except (TypeError,ValueError): continue
-                    if not 1 <= value <= 10: continue
-                    result.append({'ISO3':iso,'País':COUNTRIES[iso], 'Ano':2025,'Valor':value})
-                if result:
-                    return pd.DataFrame(result, columns=DATA_COLUMNS).drop_duplicates(['ISO3','Ano'])
-    raise ValueError('A planilha oficial foi obtida, mas sua estrutura não corresponde ao formato esperado. Não foram inferidas pontuações; é necessário ajustar o leitor à edição atual.')
+    if not zipfile.is_zipfile(io.BytesIO(response.content)):
+        raise ValueError('A fonte GI-TOC não forneceu um arquivo Excel XLSX válido.')
+
+    ns = {'x': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+
+    def normalize(value):
+        t = unicodedata.normalize('NFKD', str(value or ''))
+        t = ''.join(ch for ch in t if not unicodedata.combining(ch)).lower()
+        return ' '.join(re.sub(r'[^a-z0-9]+', ' ', t).split())
+
+    names = {normalize(name): iso for iso, name in COUNTRIES.items()}
+    names.update({
+        'brazil': 'BRA', 'russian federation': 'RUS', 'russia': 'RUS',
+        'iran islamic republic of': 'IRN', 'iran': 'IRN',
+        'venezuela bolivarian republic of': 'VEN', 'venezuela': 'VEN',
+        'bolivia plurinational state of': 'BOL', 'bolivia': 'BOL',
+        'turkiye': 'TUR', 'egypt': 'EGY', 'south africa': 'ZAF',
+        'united arab emirates': 'ARE', 'saudi arabia': 'SAU',
+        'dominican republic': 'DOM', 'el salvador': 'SLV',
+        'cote d ivoire': 'CIV', 'viet nam': 'VNM',
+    })
+
+    def country_iso(cell):
+        raw = str(cell or '').strip().upper()
+        if raw in COUNTRIES:
+            return raw
+        return names.get(normalize(cell))
+
+    def numerical(cell):
+        if cell is None or str(cell).strip() in ('', '-', 'N/A'):
+            return None
+        try:
+            num = float(str(cell).strip().replace(',', '.'))
+            return num if pd.notna(num) and 1 <= num <= 10 else None
+        except (ValueError, TypeError):
+            return None
+
+    def is_criminality(label):
+        key = normalize(label)
+        return ('criminality' in key or 'criminalidade' in key) and not any(
+            bad in key for bad in (
+                'resilience', 'resiliencia', 'criminal market', 'criminal actor',
+                'criminal markets', 'criminal actors', 'ranking', 'rank',
+                'change', 'variation', 'difference', 'delta',
+            )
+        )
+
+    def is_country(label):
+        key = normalize(label)
+        return any(t in key for t in ('country', 'countries', 'estado', 'pais', 'country name', 'economy'))
+
+    sheet_diagnostics = []
+    with zipfile.ZipFile(io.BytesIO(response.content)) as workbook:
+        shared = []
+        if 'xl/sharedStrings.xml' in workbook.namelist():
+            root = ET.fromstring(workbook.read('xl/sharedStrings.xml'))
+            shared = [''.join(t.text or '' for t in si.findall('.//x:t', ns))
+                      for si in root.findall('x:si', ns)]
+        sheets = sorted(
+            (name for name in workbook.namelist()
+             if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', name)),
+            key=lambda name: int(re.search(r'sheet(\d+)', name).group(1))
+        )
+        for sheet in sheets:
+            root = ET.fromstring(workbook.read(sheet))
+            rows = []
+            for xmlrow in root.findall('.//x:sheetData/x:row', ns):
+                row = {}
+                for cell in xmlrow.findall('x:c', ns):
+                    addr = re.match(r'[A-Z]+', cell.get('r', ''))
+                    if not addr:
+                        continue
+                    col = 0
+                    for char in addr.group():
+                        col = col * 26 + ord(char) - 64
+                    value_node = cell.find('x:v', ns)
+                    inline_node = cell.find('x:is', ns)
+                    kind = cell.get('t')
+                    if kind == 's' and value_node is not None:
+                        try:
+                            value = shared[int(value_node.text)]
+                        except (ValueError, TypeError, IndexError):
+                            value = ''
+                    elif inline_node is not None:
+                        value = ''.join(t.text or '' for t in inline_node.findall('.//x:t', ns))
+                    else:
+                        value = value_node.text if value_node is not None else ''
+                    row[col - 1] = value
+                if row:
+                    rows.append(row)
+            if not rows:
+                continue
+
+            # Testa até 100 linhas: a fonte pode trazer sumário, metadados ou
+            # cabeçalhos multinível acima da tabela propriamente dita.
+            candidates = []
+            for idx, header in enumerate(rows[:100]):
+                labels = {c: normalize(v) for c, v in header.items()}
+                score_cols = [c for c, label in labels.items() if is_criminality(label)]
+                if not score_cols:
+                    # Cabeçalho na linha acima e '2025' / 'Score' na linha atual.
+                    if idx > 0:
+                        prior = rows[idx - 1]
+                        for c, label in prior.items():
+                            if is_criminality(label) and any(
+                                normalize(header.get(c + offset, '')) in ('', '2025', 'score', 'value', 'index', 'total')
+                                for offset in (0, 1)
+                            ):
+                                score_cols.append(c)
+                if not score_cols:
+                    continue
+                country_cols = [c for c, label in labels.items() if is_country(label)]
+                if not country_cols and idx > 0:
+                    country_cols = [c for c, label in rows[idx - 1].items() if is_country(label)]
+                # Em alguns arquivos a coluna de países não tem cabeçalho.
+                if not country_cols:
+                    counts = {}
+                    for sample in rows[idx + 1: idx + 70]:
+                        for c, value in sample.items():
+                            if country_iso(value):
+                                counts[c] = counts.get(c, 0) + 1
+                    country_cols = [c for c, count in counts.items() if count >= 3]
+                for country_col in country_cols:
+                    for score_col in score_cols:
+                        if country_col == score_col:
+                            continue
+                        found = {}
+                        for data_row in rows[idx + 1:]:
+                            iso = country_iso(data_row.get(country_col))
+                            value = numerical(data_row.get(score_col))
+                            if iso and value is not None and iso not in found:
+                                found[iso] = value
+                        if len(found) >= 3:
+                            candidates.append((len(found), idx, country_col, score_col, found))
+            if candidates:
+                # Prefere a coluna que oferece melhor cobertura dos países do Atlas.
+                best = max(candidates, key=lambda x: x[0])
+                found = best[-1]
+                data = [
+                    {'ISO3': iso, 'País': COUNTRIES[iso], 'Ano': 2025, 'Valor': score}
+                    for iso, score in found.items()
+                ]
+                return pd.DataFrame(data, columns=DATA_COLUMNS).sort_values('País').reset_index(drop=True)
+            sheet_diagnostics.append(f'{sheet}: {len(rows)} linhas')
+
+    raise ValueError(
+        'A estrutura da planilha GI-TOC 2025 não pôde ser reconhecida com segurança. '
+        'Não foram utilizados valores de outros subíndices. '
+        'Diagnóstico: ' + '; '.join(sheet_diagnostics[:8])
+    )
 # Receita tributária harmonizada da OCDE, com contribuições sociais obrigatórias.
 # Conjunto Global Revenue Statistics, séries do governo geral como % do PIB.
 OECD_TAX_URL = (
