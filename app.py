@@ -351,14 +351,14 @@ def load_ocindex_2025():
         'turkiye': 'TUR', 'egypt': 'EGY', 'south africa': 'ZAF',
         'united arab emirates': 'ARE', 'saudi arabia': 'SAU',
         'dominican republic': 'DOM', 'el salvador': 'SLV',
-        'cote d ivoire': 'CIV', 'viet nam': 'VNM',
     })
 
     def country_iso(cell):
         raw = str(cell or '').strip().upper()
         if raw in COUNTRIES:
             return raw
-        return names.get(normalize(cell))
+        iso = names.get(normalize(cell))
+        return iso if iso in COUNTRIES else None
 
     def numerical(cell):
         if cell is None or str(cell).strip() in ('', '-', 'N/A'):
@@ -451,7 +451,7 @@ def load_ocindex_2025():
                     counts = {}
                     for sample in rows[idx + 1: idx + 70]:
                         for c, value in sample.items():
-                            if country_iso(value):
+                            if country_iso(value) in COUNTRIES:
                                 counts[c] = counts.get(c, 0) + 1
                     country_cols = [c for c, count in counts.items() if count >= 3]
                 for country_col in country_cols:
@@ -462,7 +462,7 @@ def load_ocindex_2025():
                         for data_row in rows[idx + 1:]:
                             iso = country_iso(data_row.get(country_col))
                             value = numerical(data_row.get(score_col))
-                            if iso and value is not None and iso not in found:
+                            if iso in COUNTRIES and value is not None and iso not in found:
                                 found[iso] = value
                         if len(found) >= 3:
                             candidates.append((len(found), idx, country_col, score_col, found))
@@ -472,7 +472,7 @@ def load_ocindex_2025():
                 found = best[-1]
                 data = [
                     {'ISO3': iso, 'País': COUNTRIES[iso], 'Ano': 2025, 'Valor': score}
-                    for iso, score in found.items()
+                    for iso, score in found.items() if iso in COUNTRIES
                 ]
                 return pd.DataFrame(data, columns=DATA_COLUMNS).sort_values('País').reset_index(drop=True)
             sheet_diagnostics.append(f'{sheet}: {len(rows)} linhas')
